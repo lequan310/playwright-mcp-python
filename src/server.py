@@ -1,30 +1,30 @@
-from fastmcp import FastMCP
-from playwright.async_api import async_playwright, Browser, Page, BrowserContext
-from typing import Optional, List, Dict, Any
-import asyncio
 import json
 from datetime import datetime
-import os
+from typing import Any, Literal, Optional
+
+from fastmcp import FastMCP
+from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
 mcp = FastMCP("Playwright MCP Server")
 
 # Global state for browser management
+headless = True
 browser: Optional[Browser] = None
 context: Optional[BrowserContext] = None
-pages: List[Page] = []
+pages: list[Page] = []
 current_page_index: int = 0
 playwright_instance = None
-console_messages: List[Dict[str, Any]] = []
-network_requests: List[Dict[str, Any]] = []
+console_messages: list[dict[str, Any]] = []
+network_requests: list[dict[str, Any]] = []
 
 
-async def ensure_browser():
+async def ensure_browser(headless: bool = True) -> list[Page]:
     """Ensure browser is initialized"""
     global browser, context, pages, current_page_index, playwright_instance
 
     if browser is None:
         playwright_instance = await async_playwright().start()
-        browser = await playwright_instance.chromium.launch(headless=False)
+        browser = await playwright_instance.chromium.launch(headless=headless)
         context = await browser.new_context()
         page = await context.new_page()
         pages = [page]
@@ -65,9 +65,7 @@ def get_current_page() -> Optional[Page]:
 
 
 @mcp.tool()
-async def browser_open(
-    headless: bool = False, width: int = 1280, height: int = 720
-) -> str:
+async def browser_open(width: int = 1920, height: int = 1080) -> str:
     """Open a new browser instance
 
     Args:
@@ -75,7 +73,7 @@ async def browser_open(
         width: Initial browser width
         height: Initial browser height
     """
-    global browser, context, pages, current_page_index, playwright_instance, console_messages, network_requests
+    global browser, context, pages, current_page_index, playwright_instance, console_messages, network_requests, headless
 
     if browser is not None:
         return "Browser is already open. Close it first with browser_close before opening a new one."
@@ -245,7 +243,7 @@ async def browser_click(
     ref: str,
     doubleClick: bool = False,
     button: str = "left",
-    modifiers: Optional[List[str]] = None,
+    modifiers: Optional[list[str]] = None,
 ) -> str:
     """Perform click on a web page
 
@@ -336,7 +334,7 @@ async def browser_press_key(key: str) -> str:
 
 
 @mcp.tool()
-async def browser_fill_form(fields: List[Dict[str, str]]) -> str:
+async def browser_fill_form(fields: list[dict[str, str]]) -> str:
     """Fill multiple form fields
 
     Args:
@@ -360,7 +358,7 @@ async def browser_fill_form(fields: List[Dict[str, str]]) -> str:
 
 
 @mcp.tool()
-async def browser_select_option(element: str, ref: str, values: List[str]) -> str:
+async def browser_select_option(element: str, ref: str, values: list[str]) -> str:
     """Select an option in a dropdown
 
     Args:
@@ -377,7 +375,7 @@ async def browser_select_option(element: str, ref: str, values: List[str]) -> st
 
 
 @mcp.tool()
-async def browser_file_upload(paths: Optional[List[str]] = None) -> str:
+async def browser_file_upload(paths: Optional[list[str]] = None) -> str:
     """Upload one or multiple files
 
     Args:
@@ -537,7 +535,9 @@ async def browser_network_requests() -> str:
 
 
 @mcp.tool()
-async def browser_tabs(action: str, index: Optional[int] = None) -> str:
+async def browser_tabs(
+    action: Literal["list", "create", "close", "select"], index: Optional[int] = None
+) -> str:
     """List, create, close, or select a browser tab
 
     Args:

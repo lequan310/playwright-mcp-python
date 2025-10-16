@@ -3,14 +3,15 @@ Playwright MCP Server with Session Management
 This version supports multiple concurrent clients with isolated browser sessions.
 """
 
-from fastmcp import FastMCP
-from playwright.async_api import async_playwright, Browser, Page, BrowserContext
-from typing import Optional, List, Dict, Any
-import json
-from datetime import datetime
-from dataclasses import dataclass, field
 import asyncio
+import json
 import uuid
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any, Dict, List, Literal, Optional
+
+from fastmcp import FastMCP
+from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
 mcp = FastMCP("Playwright MCP Server (Session-Based)")
 
@@ -462,10 +463,10 @@ async def browser_fill_form(
         return "No browser page available"
 
     filled_fields = []
-    for field in fields:
-        ref = field.get("ref")
-        value = field.get("value")
-        element_desc = field.get("element", ref)
+    for fld in fields:
+        ref = fld.get("ref")
+        value = fld.get("value")
+        element_desc = fld.get("element", ref)
 
         if ref and value:
             await page.fill(ref, value)
@@ -692,7 +693,9 @@ async def browser_network_requests(session_id: str = "default") -> str:
 
 @mcp.tool()
 async def browser_tabs(
-    action: str, session_id: str = "default", index: Optional[int] = None
+    action: Literal["list", "create", "close", "select"],
+    session_id: str = "default",
+    index: Optional[int] = None,
 ) -> str:
     """List, create, close, or select a browser tab
 
@@ -776,7 +779,6 @@ async def browser_tabs(
 
 if __name__ == "__main__":
     # Start the server with background cleanup task
-    import sys
 
     async def main():
         # Start cleanup task
