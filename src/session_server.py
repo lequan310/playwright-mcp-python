@@ -9,6 +9,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
+from urllib.parse import quote_plus
 
 from fastmcp import FastMCP
 from playwright.async_api import Browser, BrowserContext, Page, async_playwright
@@ -206,6 +207,28 @@ async def browser_navigate_back(session_id: str = "default") -> str:
 
     await page.go_back()
     return "Navigated back"
+
+
+@mcp.tool()
+async def browser_search(query: str, session_id: str = "default") -> str:
+    """Search for a topic using Google search
+
+    Args:
+        query: The search query or topic to search for
+        session_id: Unique identifier for this client session
+    """
+    session = get_session(session_id)
+
+    if session.browser is None:
+        # Auto-open browser if not already open
+        await browser_open(session_id=session_id)
+        session = get_session(session_id)
+
+    page = get_current_page(session)
+    encoded_query = quote_plus(query)
+    search_url = f"https://www.google.com/search?q={encoded_query}"
+    await page.goto(search_url)
+    return f"Searched for '{query}' on Google: {search_url}"
 
 
 @mcp.tool()

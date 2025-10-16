@@ -1,6 +1,7 @@
 import json
 from datetime import datetime
 from typing import Any, Literal, Optional
+from urllib.parse import quote_plus
 
 from fastmcp import FastMCP
 from playwright.async_api import Browser, BrowserContext, Page, async_playwright
@@ -136,6 +137,20 @@ async def browser_navigate_back() -> str:
 
     await page.go_back()
     return "Navigated back"
+
+
+@mcp.tool()
+async def browser_search(query: str) -> str:
+    """Search for a topic using Google search
+
+    Args:
+        query: The search query or topic to search for
+    """
+    page = await ensure_browser()
+    encoded_query = quote_plus(query)
+    search_url = f"https://www.google.com/search?q={encoded_query}"
+    await page.goto(search_url)
+    return f"Searched for '{query}' on Google: {search_url}"
 
 
 @mcp.tool()
@@ -480,55 +495,55 @@ async def browser_wait_for(
 # Dialog and Monitoring Tools
 
 
-@mcp.tool()
-async def browser_handle_dialog(accept: bool, promptText: Optional[str] = None) -> str:
-    """Handle a dialog
+# @mcp.tool()
+# async def browser_handle_dialog(accept: bool, promptText: Optional[str] = None) -> str:
+#     """Handle a dialog
 
-    Args:
-        accept: Whether to accept the dialog
-        promptText: Text to enter in prompt dialog
-    """
-    page = get_current_page()
-    if not page:
-        return "No browser page available"
+#     Args:
+#         accept: Whether to accept the dialog
+#         promptText: Text to enter in prompt dialog
+#     """
+#     page = get_current_page()
+#     if not page:
+#         return "No browser page available"
 
-    # Set up dialog handler for the next dialog
-    async def handle_dialog(dialog):
-        if accept:
-            if promptText:
-                await dialog.accept(promptText)
-            else:
-                await dialog.accept()
-        else:
-            await dialog.dismiss()
+#     # Set up dialog handler for the next dialog
+#     async def handle_dialog(dialog):
+#         if accept:
+#             if promptText:
+#                 await dialog.accept(promptText)
+#             else:
+#                 await dialog.accept()
+#         else:
+#             await dialog.dismiss()
 
-    page.once("dialog", handle_dialog)
+#     page.once("dialog", handle_dialog)
 
-    action = "accept" if accept else "dismiss"
-    return f"Dialog handler set to {action}"
-
-
-@mcp.tool()
-async def browser_console_messages(onlyErrors: bool = False) -> str:
-    """Returns all console messages
-
-    Args:
-        onlyErrors: Only return error messages
-    """
-    global console_messages
-
-    if onlyErrors:
-        errors = [msg for msg in console_messages if msg["type"] == "error"]
-        return json.dumps(errors, indent=2)
-
-    return json.dumps(console_messages, indent=2)
+#     action = "accept" if accept else "dismiss"
+#     return f"Dialog handler set to {action}"
 
 
-@mcp.tool()
-async def browser_network_requests() -> str:
-    """Returns all network requests since loading the page"""
-    global network_requests
-    return json.dumps(network_requests, indent=2)
+# @mcp.tool()
+# async def browser_console_messages(onlyErrors: bool = False) -> str:
+#     """Returns all console messages
+
+#     Args:
+#         onlyErrors: Only return error messages
+#     """
+#     global console_messages
+
+#     if onlyErrors:
+#         errors = [msg for msg in console_messages if msg["type"] == "error"]
+#         return json.dumps(errors, indent=2)
+
+#     return json.dumps(console_messages, indent=2)
+
+
+# @mcp.tool()
+# async def browser_network_requests() -> str:
+#     """Returns all network requests since loading the page"""
+#     global network_requests
+#     return json.dumps(network_requests, indent=2)
 
 
 # Tab Management Tools
