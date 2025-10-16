@@ -40,6 +40,90 @@ MAX_SESSIONS = 10
 SESSION_TIMEOUT = 1800  # 30 minutes in seconds
 
 
+def _setup_page_listeners(page: Page, session: BrowserSession) -> None:
+    """Set up console and network listeners for a page"""
+    # Set up console message listener
+    page.on(
+        "console",
+        lambda msg: session.console_messages.append(
+            {"type": msg.type, "text": msg.text, "location": msg.location}
+        ),
+    )
+
+    # Set up network request listener
+    page.on(
+        "request",
+        lambda request: session.network_requests.append(
+            {
+                "url": request.url,
+                "method": request.method,
+                "headers": request.headers,
+                "resourceType": request.resource_type,
+            }
+        ),
+    )
+
+
+async def _initialize_browser(
+    session: BrowserSession,
+    headless: bool = True,
+    width: int = 1920,
+    height: int = 1080,
+) -> Page:
+    """Initialize browser with consistent settings for a session"""
+
+    session.playwright_instance = await async_playwright().start()
+    session.browser = await session.playwright_instance.chromium.launch(
+        headless=headless,
+        args=["--disable-blink-features=AutomationControlled", "--disable-info-bars"],
+    )
+
+    # Handle browser close event
+    def handle_browser_close():
+        session.browser = None
+        session.context = None
+        session.pages = []
+        session.playwright_instance = None
+        session.console_messages = []
+        session.network_requests = []
+        session.current_page_index = 0
+
+    session.browser.on("disconnected", handle_browser_close)
+
+    session.context = await session.browser.new_context(
+        viewport={"width": width, "height": height},
+        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+        locale="en-US",
+        timezone_id="America/New_York",
+        extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
+    )
+    page = await session.context.new_page()
+    session.pages = [page]
+    session.current_page_index = 0
+    session.console_messages = []
+    session.network_requests = []
+
+    # Set up listeners
+    _setup_page_listeners(page, session)
+
+    # Hide webdriver flag
+    await page.add_init_script(
+        """
+        Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+    """
+    )
+
+    # Spoof plugins & languages
+    await page.add_init_script(
+        """
+        Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3]});
+        Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+    """
+    )
+
+    return page
+
+
 def get_session(session_id: str) -> BrowserSession:
     """Get or create a browser session for the given session ID"""
     if session_id not in sessions:
@@ -121,39 +205,7 @@ async def browser_open(
     if session.browser is not None:
         return f"Browser is already open for session {session_id}"
 
-    session.playwright_instance = await async_playwright().start()
-    session.browser = await session.playwright_instance.chromium.launch(
-        headless=headless
-    )
-    session.context = await session.browser.new_context(
-        viewport={"width": width, "height": height}
-    )
-    page = await session.context.new_page()
-    session.pages = [page]
-    session.current_page_index = 0
-    session.console_messages = []
-    session.network_requests = []
-
-    # Set up console message listener
-    page.on(
-        "console",
-        lambda msg: session.console_messages.append(
-            {"type": msg.type, "text": msg.text, "location": msg.location}
-        ),
-    )
-
-    # Set up network request listener
-    page.on(
-        "request",
-        lambda request: session.network_requests.append(
-            {
-                "url": request.url,
-                "method": request.method,
-                "headers": request.headers,
-                "resourceType": request.resource_type,
-            }
-        ),
-    )
+    await _initialize_browser(session, headless=headless, width=width, height=height)
 
     mode = "headless" if headless else "headed"
     return f"Browser opened in {mode} mode for session {session_id} with viewport {width}x{height}"
@@ -751,23 +803,7 @@ async def browser_tabs(
         new_page = await session.context.new_page()
 
         # Set up listeners for new page
-        new_page.on(
-            "console",
-            lambda msg: session.console_messages.append(
-                {"type": msg.type, "text": msg.text, "location": msg.location}
-            ),
-        )
-        new_page.on(
-            "request",
-            lambda request: session.network_requests.append(
-                {
-                    "url": request.url,
-                    "method": request.method,
-                    "headers": request.headers,
-                    "resourceType": request.resource_type,
-                }
-            ),
-        )
+        _setup_page_listeners(new_page, session)
 
         session.pages.append(new_page)
         session.current_page_index = len(session.pages) - 1
