@@ -10,7 +10,7 @@ from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 mcp = FastMCP("Playwright MCP Server")
 
 # Global state for browser management
-headless = True
+headless = False
 browser: Optional[Browser] = None
 context: Optional[BrowserContext] = None
 pages: list[Page] = []
@@ -20,83 +20,8 @@ console_messages: list[dict[str, Any]] = []
 network_requests: list[dict[str, Any]] = []
 
 
-async def ensure_browser(headless: bool = True) -> list[Page]:
-    """Ensure browser is initialized"""
-    global browser, context, pages, current_page_index, playwright_instance
-
-    if browser is None:
-        playwright_instance = await async_playwright().start()
-        browser = await playwright_instance.chromium.launch(headless=headless)
-        context = await browser.new_context()
-        page = await context.new_page()
-        pages = [page]
-        current_page_index = 0
-
-        # Set up console message listener
-        page.on(
-            "console",
-            lambda msg: console_messages.append(
-                {"type": msg.type, "text": msg.text, "location": msg.location}
-            ),
-        )
-
-        # Set up network request listener
-        page.on(
-            "request",
-            lambda request: network_requests.append(
-                {
-                    "url": request.url,
-                    "method": request.method,
-                    "headers": request.headers,
-                    "resourceType": request.resource_type,
-                }
-            ),
-        )
-
-    return pages[current_page_index]
-
-
-def get_current_page() -> Optional[Page]:
-    """Get the current active page"""
-    if pages and 0 <= current_page_index < len(pages):
-        return pages[current_page_index]
-    return None
-
-
-# Browser Lifecycle Tools
-
-
-@mcp.tool()
-async def browser_open(width: int = 1920, height: int = 1080) -> str:
-    """Open a new browser instance
-
-    Args:
-        headless: Whether to run browser in headless mode
-        width: Initial browser width
-        height: Initial browser height
-    """
-    global browser, context, pages, current_page_index, playwright_instance, console_messages, network_requests, headless
-
-    if browser is not None:
-        return "Browser is already open. Close it first with browser_close before opening a new one."
-
-    playwright_instance = await async_playwright().start()
-    browser = await playwright_instance.chromium.launch(
-        headless=headless,
-        args=["--disable-blink-features=AutomationControlled", "--disable-info-bars"],
-    )
-    context = await browser.new_context(
-        viewport={"width": width, "height": height},
-        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
-        locale="en-US",
-        timezone_id="America/New_York",
-    )
-    page = await context.new_page()
-    pages = [page]
-    current_page_index = 0
-    console_messages = []
-    network_requests = []
-
+def _setup_page_listeners(page: Page) -> None:
+    """Set up console and network listeners for a page"""
     # Set up console message listener
     page.on(
         "console",
@@ -118,6 +43,48 @@ async def browser_open(width: int = 1920, height: int = 1080) -> str:
         ),
     )
 
+
+async def _initialize_browser(
+    headless: bool = True, width: int = 1920, height: int = 1080
+) -> Page:
+    """Initialize browser with consistent settings"""
+    global browser, context, pages, current_page_index, playwright_instance, console_messages, network_requests
+
+    playwright_instance = await async_playwright().start()
+    browser = await playwright_instance.chromium.launch(
+        headless=headless,
+        args=["--disable-blink-features=AutomationControlled", "--disable-info-bars"],
+    )
+
+    # Handle browser close event
+    def handle_browser_close():
+        global browser, context, pages, playwright_instance, console_messages, network_requests, current_page_index
+        browser = None
+        context = None
+        pages = []
+        playwright_instance = None
+        console_messages = []
+        network_requests = []
+        current_page_index = 0
+
+    browser.on("disconnected", handle_browser_close)
+
+    context = await browser.new_context(
+        viewport={"width": width, "height": height},
+        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+        locale="en-US",
+        timezone_id="America/New_York",
+        extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
+    )
+    page = await context.new_page()
+    pages = [page]
+    current_page_index = 0
+    console_messages = []
+    network_requests = []
+
+    # Set up listeners
+    _setup_page_listeners(page)
+
     # Hide webdriver flag
     await page.add_init_script(
         """
@@ -133,6 +100,44 @@ async def browser_open(width: int = 1920, height: int = 1080) -> str:
     """
     )
 
+    return page
+
+
+async def ensure_browser(headless: bool = True) -> Page:
+    """Ensure browser is initialized"""
+    global browser
+
+    if browser is None:
+        await _initialize_browser(headless=headless)
+
+    return pages[current_page_index]
+
+
+def get_current_page() -> Optional[Page]:
+    """Get the current active page"""
+    if pages and 0 <= current_page_index < len(pages):
+        return pages[current_page_index]
+    return None
+
+
+# Browser Lifecycle Tools
+
+
+@mcp.tool()
+async def browser_open(width: int = 1920, height: int = 1080) -> str:
+    """Open a new browser instance
+
+    Args:
+        width: Initial browser width
+        height: Initial browser height
+    """
+    global browser, headless
+
+    if browser is not None:
+        return "Browser is already open. Close it first with browser_close before opening a new one."
+
+    await _initialize_browser(headless=headless, width=width, height=height)
+
     mode = "headless" if headless else "headed"
     return f"Browser opened in {mode} mode with viewport {width}x{height}"
 
@@ -147,7 +152,8 @@ async def browser_navigate(url: str) -> str:
     Args:
         url: The URL to navigate to
     """
-    page = await ensure_browser()
+    global headless
+    page = await ensure_browser(headless=headless)
     await page.goto(url)
     return f"Navigated to {url}"
 
@@ -163,18 +169,19 @@ async def browser_navigate_back() -> str:
     return "Navigated back"
 
 
-# @mcp.tool()
-# async def browser_search(query: str) -> str:
-#     """Search for a topic using Google search
+@mcp.tool()
+async def browser_search(query: str) -> str:
+    """Search for a topic using Google search
 
-#     Args:
-#         query: The search query or topic to search for
-#     """
-#     page = await ensure_browser()
-#     encoded_query = quote_plus(query)
-#     search_url = f"https://www.google.com/search?q={encoded_query}"
-#     await page.goto(search_url)
-#     return f"Searched for '{query}' on Google: {search_url}"
+    Args:
+        query: The search query or topic to search for
+    """
+    global headless
+    page = await ensure_browser(headless=headless)
+    encoded_query = quote_plus(query)
+    search_url = f"https://www.google.com/search?q={encoded_query}"
+    await page.goto(search_url)
+    return f"Searched for '{query}' on Google: {search_url}"
 
 
 @mcp.tool()
@@ -577,7 +584,7 @@ async def browser_tabs(
         action: Operation to perform (list, create, close, select)
         index: Tab index for close/select operations
     """
-    global pages, current_page_index, context
+    global pages, current_page_index, context, headless
 
     if action == "list":
         tabs_info = []
@@ -591,27 +598,11 @@ async def browser_tabs(
         return json.dumps(tabs_info, indent=2)
 
     elif action == "create":
-        await ensure_browser()
+        await ensure_browser(headless=headless)
         new_page = await context.new_page()
 
         # Set up listeners for new page
-        new_page.on(
-            "console",
-            lambda msg: console_messages.append(
-                {"type": msg.type, "text": msg.text, "location": msg.location}
-            ),
-        )
-        new_page.on(
-            "request",
-            lambda request: network_requests.append(
-                {
-                    "url": request.url,
-                    "method": request.method,
-                    "headers": request.headers,
-                    "resourceType": request.resource_type,
-                }
-            ),
-        )
+        _setup_page_listeners(new_page)
 
         pages.append(new_page)
         current_page_index = len(pages) - 1
