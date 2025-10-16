@@ -96,6 +96,13 @@ A Model Context Protocol (MCP) server that provides browser automation capabilit
   - Parameters: None
   - Read-only: **false**
 
+- **browser_search**
+  - Title: Search on Google
+  - Description: Search for a topic using Google search
+  - Parameters:
+    - `query` (string): The search query or topic to search for
+  - Read-only: **false**
+
 - **browser_network_requests**
   - Title: List network requests
   - Description: Returns all network requests since loading the page
