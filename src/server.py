@@ -4,6 +4,7 @@ from typing import Any, Literal, Optional
 from urllib.parse import quote_plus
 
 from fastmcp import FastMCP
+from fastmcp.utilities.types import Image
 from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
 mcp = FastMCP("Playwright MCP Server")
@@ -80,8 +81,16 @@ async def browser_open(width: int = 1920, height: int = 1080) -> str:
         return "Browser is already open. Close it first with browser_close before opening a new one."
 
     playwright_instance = await async_playwright().start()
-    browser = await playwright_instance.chromium.launch(headless=headless)
-    context = await browser.new_context(viewport={"width": width, "height": height})
+    browser = await playwright_instance.chromium.launch(
+        headless=headless,
+        args=["--disable-blink-features=AutomationControlled", "--disable-info-bars"],
+    )
+    context = await browser.new_context(
+        viewport={"width": width, "height": height},
+        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+        locale="en-US",
+        timezone_id="America/New_York",
+    )
     page = await context.new_page()
     pages = [page]
     current_page_index = 0
@@ -107,6 +116,21 @@ async def browser_open(width: int = 1920, height: int = 1080) -> str:
                 "resourceType": request.resource_type,
             }
         ),
+    )
+
+    # Hide webdriver flag
+    await page.add_init_script(
+        """
+        Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+    """
+    )
+
+    # Spoof plugins & languages
+    await page.add_init_script(
+        """
+        Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3]});
+        Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+    """
     )
 
     mode = "headless" if headless else "headed"
@@ -139,18 +163,18 @@ async def browser_navigate_back() -> str:
     return "Navigated back"
 
 
-@mcp.tool()
-async def browser_search(query: str) -> str:
-    """Search for a topic using Google search
+# @mcp.tool()
+# async def browser_search(query: str) -> str:
+#     """Search for a topic using Google search
 
-    Args:
-        query: The search query or topic to search for
-    """
-    page = await ensure_browser()
-    encoded_query = quote_plus(query)
-    search_url = f"https://www.google.com/search?q={encoded_query}"
-    await page.goto(search_url)
-    return f"Searched for '{query}' on Google: {search_url}"
+#     Args:
+#         query: The search query or topic to search for
+#     """
+#     page = await ensure_browser()
+#     encoded_query = quote_plus(query)
+#     search_url = f"https://www.google.com/search?q={encoded_query}"
+#     await page.goto(search_url)
+#     return f"Searched for '{query}' on Google: {search_url}"
 
 
 @mcp.tool()
@@ -210,43 +234,37 @@ async def browser_snapshot() -> str:
 @mcp.tool()
 async def browser_take_screenshot(
     type: str = "png",
-    filename: Optional[str] = None,
     element: Optional[str] = None,
     ref: Optional[str] = None,
     fullPage: bool = False,
-) -> str:
+) -> Image:
     """Take a screenshot of the current page
 
     Args:
         type: Image format (png or jpeg)
-        filename: File name to save the screenshot to
         element: Human-readable element description
         ref: Exact target element reference from the page snapshot
         fullPage: Take screenshot of full scrollable page
     """
     page = get_current_page()
     if not page:
-        return "No browser page available"
+        raise ValueError("No browser page available")
 
-    if not filename:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"page-{timestamp}.{type}"
-
-    screenshot_options = {"path": filename, "type": type}
+    screenshot_options = {"type": type}
 
     if element and ref:
         # Screenshot specific element
         element_handle = await page.query_selector(ref)
         if element_handle:
-            await element_handle.screenshot(**screenshot_options)
+            screenshot_bytes = await element_handle.screenshot(**screenshot_options)
         else:
-            return f"Element not found: {ref}"
+            raise ValueError(f"Element not found: {ref}")
     else:
         # Screenshot full page or viewport
         screenshot_options["full_page"] = fullPage
-        await page.screenshot(**screenshot_options)
+        screenshot_bytes = await page.screenshot(**screenshot_options)
 
-    return f"Screenshot saved to {filename}"
+    return Image(data=screenshot_bytes, format=type)
 
 
 # Interaction Tools

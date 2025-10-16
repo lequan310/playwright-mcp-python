@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Literal, Optional
 from urllib.parse import quote_plus
 
 from fastmcp import FastMCP
+from fastmcp.utilities.types import Image
 from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
 mcp = FastMCP("Playwright MCP Server (Session-Based)")
@@ -104,8 +105,8 @@ def get_current_page(session: BrowserSession) -> Optional[Page]:
 async def browser_open(
     session_id: str = "default",
     headless: bool = True,
-    width: int = 1280,
-    height: int = 720,
+    width: int = 1920,
+    height: int = 1080,
 ) -> str:
     """Open a new browser instance for this session
 
@@ -209,26 +210,26 @@ async def browser_navigate_back(session_id: str = "default") -> str:
     return "Navigated back"
 
 
-@mcp.tool()
-async def browser_search(query: str, session_id: str = "default") -> str:
-    """Search for a topic using Google search
+# @mcp.tool()
+# async def browser_search(query: str, session_id: str = "default") -> str:
+#     """Search for a topic using Google search
 
-    Args:
-        query: The search query or topic to search for
-        session_id: Unique identifier for this client session
-    """
-    session = get_session(session_id)
+#     Args:
+#         query: The search query or topic to search for
+#         session_id: Unique identifier for this client session
+#     """
+#     session = get_session(session_id)
 
-    if session.browser is None:
-        # Auto-open browser if not already open
-        await browser_open(session_id=session_id)
-        session = get_session(session_id)
+#     if session.browser is None:
+#         # Auto-open browser if not already open
+#         await browser_open(session_id=session_id)
+#         session = get_session(session_id)
 
-    page = get_current_page(session)
-    encoded_query = quote_plus(query)
-    search_url = f"https://www.google.com/search?q={encoded_query}"
-    await page.goto(search_url)
-    return f"Searched for '{query}' on Google: {search_url}"
+#     page = get_current_page(session)
+#     encoded_query = quote_plus(query)
+#     search_url = f"https://www.google.com/search?q={encoded_query}"
+#     await page.goto(search_url)
+#     return f"Searched for '{query}' on Google: {search_url}"
 
 
 @mcp.tool()
@@ -274,7 +275,6 @@ async def browser_snapshot(session_id: str = "default") -> str:
 async def browser_take_screenshot(
     session_id: str = "default",
     type: str = "png",
-    filename: Optional[str] = None,
     element: Optional[str] = None,
     ref: Optional[str] = None,
     fullPage: bool = False,
@@ -299,19 +299,21 @@ async def browser_take_screenshot(
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"page-{session_id}-{timestamp}.{type}"
 
-    screenshot_options = {"path": filename, "type": type}
+    screenshot_options = {"type": type}
 
     if element and ref:
+        # Screenshot specific element
         element_handle = await page.query_selector(ref)
         if element_handle:
-            await element_handle.screenshot(**screenshot_options)
+            screenshot_bytes = await element_handle.screenshot(**screenshot_options)
         else:
-            return f"Element not found: {ref}"
+            raise ValueError(f"Element not found: {ref}")
     else:
+        # Screenshot full page or viewport
         screenshot_options["full_page"] = fullPage
-        await page.screenshot(**screenshot_options)
+        screenshot_bytes = await page.screenshot(**screenshot_options)
 
-    return f"Screenshot saved to {filename}"
+    return Image(data=screenshot_bytes, format=type)
 
 
 # Session Management Tools
