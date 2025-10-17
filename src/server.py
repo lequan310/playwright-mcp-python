@@ -386,6 +386,7 @@ async def browser_click(
     role: Optional[str] = None,
     name: Optional[str] = None,
     selector: Optional[str] = None,
+    nth: Optional[int] = None,
     doubleClick: bool = False,
     button: str = "left",
     modifiers: Optional[list[str]] = None,
@@ -397,6 +398,7 @@ async def browser_click(
         role: ARIA role of the element (e.g., 'button', 'link', 'textbox')
         name: Accessible name of the element (from snapshot)
         selector: CSS selector (fallback if role/name not available)
+        nth: Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
         doubleClick: Whether to perform a double click
         button: Button to click (left, right, middle)
         modifiers: Modifier keys to press (Alt, Control, Meta, Shift)
@@ -413,12 +415,17 @@ async def browser_click(
         # Prefer role-based locators (more reliable)
         if role and name:
             locator = page.get_by_role(role, name=name)
+            if nth is not None:
+                locator = locator.nth(nth)
+            nth_msg = f", nth={nth}" if nth is not None else ""
             if doubleClick:
                 await locator.dblclick(**click_options)
-                message = f"Double-clicked on {element} (role={role}, name={name})"
+                message = (
+                    f"Double-clicked on {element} (role={role}, name={name}{nth_msg})"
+                )
             else:
                 await locator.click(**click_options)
-                message = f"Clicked on {element} (role={role}, name={name})"
+                message = f"Clicked on {element} (role={role}, name={name}{nth_msg})"
         elif selector:
             if doubleClick:
                 await page.dblclick(selector, **click_options)
@@ -440,6 +447,7 @@ async def browser_hover(
     role: Optional[str] = None,
     name: Optional[str] = None,
     selector: Optional[str] = None,
+    nth: Optional[int] = None,
 ) -> dict[str, Any]:
     """Hover over element on page
 
@@ -448,6 +456,7 @@ async def browser_hover(
         role: ARIA role of the element (e.g., 'button', 'link', 'textbox')
         name: Accessible name of the element (from snapshot)
         selector: CSS selector (fallback if role/name not available)
+        nth: Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
     """
     page = get_current_page()
     if not page:
@@ -456,8 +465,12 @@ async def browser_hover(
     try:
         # Prefer role-based locators
         if role and name:
-            await page.get_by_role(role, name=name).hover()
-            message = f"Hovered over {element} (role={role}, name={name})"
+            locator = page.get_by_role(role, name=name)
+            if nth is not None:
+                locator = locator.nth(nth)
+            await locator.hover()
+            nth_msg = f", nth={nth}" if nth is not None else ""
+            message = f"Hovered over {element} (role={role}, name={name}{nth_msg})"
         elif selector:
             await page.hover(selector)
             message = f"Hovered over {element} (selector={selector})"
@@ -476,6 +489,7 @@ async def browser_type(
     role: Optional[str] = None,
     name: Optional[str] = None,
     selector: Optional[str] = None,
+    nth: Optional[int] = None,
     submit: bool = False,
     slowly: bool = False,
 ) -> dict[str, Any]:
@@ -487,6 +501,7 @@ async def browser_type(
         role: ARIA role of the element (e.g., 'textbox', 'searchbox', 'combobox')
         name: Accessible name of the element (from snapshot)
         selector: CSS selector (fallback if role/name not available)
+        nth: Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
         submit: Whether to submit (press Enter after)
         slowly: Whether to type one character at a time
     """
@@ -498,16 +513,21 @@ async def browser_type(
         # Prefer role-based locators
         if role and name:
             locator = page.get_by_role(role, name=name)
+            if nth is not None:
+                locator = locator.nth(nth)
             if slowly:
                 await locator.type(text)
             else:
                 await locator.fill(text)
 
+            nth_msg = f", nth={nth}" if nth is not None else ""
             if submit:
                 await locator.press("Enter")
-                message = f"Typed '{text}' into {element} and submitted (role={role}, name={name})"
+                message = f"Typed '{text}' into {element} and submitted (role={role}, name={name}{nth_msg})"
             else:
-                message = f"Typed '{text}' into {element} (role={role}, name={name})"
+                message = (
+                    f"Typed '{text}' into {element} (role={role}, name={name}{nth_msg})"
+                )
         elif selector:
             if slowly:
                 await page.type(selector, text)
@@ -597,6 +617,7 @@ async def browser_select_option(
     role: Optional[str] = None,
     name: Optional[str] = None,
     selector: Optional[str] = None,
+    nth: Optional[int] = None,
 ) -> dict[str, Any]:
     """Select an option in a dropdown
 
@@ -606,6 +627,7 @@ async def browser_select_option(
         role: ARIA role of the element (typically 'combobox' or 'listbox')
         name: Accessible name of the element (from snapshot)
         selector: CSS selector (fallback if role/name not available)
+        nth: Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
     """
     page = get_current_page()
     if not page:
@@ -613,8 +635,14 @@ async def browser_select_option(
 
     try:
         if role and name:
-            await page.get_by_role(role, name=name).select_option(values)
-            message = f"Selected {values} in {element} (role={role}, name={name})"
+            locator = page.get_by_role(role, name=name)
+            if nth is not None:
+                locator = locator.nth(nth)
+            await locator.select_option(values)
+            nth_msg = f", nth={nth}" if nth is not None else ""
+            message = (
+                f"Selected {values} in {element} (role={role}, name={name}{nth_msg})"
+            )
         elif selector:
             await page.select_option(selector, values)
             message = f"Selected {values} in {element} (selector={selector})"
@@ -659,9 +687,11 @@ async def browser_drag(
     startRole: Optional[str] = None,
     startName: Optional[str] = None,
     startSelector: Optional[str] = None,
+    startNth: Optional[int] = None,
     endRole: Optional[str] = None,
     endName: Optional[str] = None,
     endSelector: Optional[str] = None,
+    endNth: Optional[int] = None,
 ) -> dict[str, Any]:
     """Perform drag and drop between two elements
 
@@ -671,9 +701,11 @@ async def browser_drag(
         startRole: ARIA role of source element
         startName: Accessible name of source element
         startSelector: CSS selector for source (fallback)
+        startNth: Zero-based index for source element when multiple match
         endRole: ARIA role of target element
         endName: Accessible name of target element
         endSelector: CSS selector for target (fallback)
+        endNth: Zero-based index for target element when multiple match
     """
     page = get_current_page()
     if not page:
@@ -683,7 +715,12 @@ async def browser_drag(
         # Determine source locator
         if startRole and startName:
             source = page.get_by_role(startRole, name=startName)
-            source_desc = f"{startElement} (role={startRole}, name={startName})"
+            if startNth is not None:
+                source = source.nth(startNth)
+            nth_msg = f", nth={startNth}" if startNth is not None else ""
+            source_desc = (
+                f"{startElement} (role={startRole}, name={startName}{nth_msg})"
+            )
         elif startSelector:
             source = page.locator(startSelector)
             source_desc = f"{startElement} (selector={startSelector})"
@@ -695,7 +732,10 @@ async def browser_drag(
         # Determine target locator
         if endRole and endName:
             target = page.get_by_role(endRole, name=endName)
-            target_desc = f"{endElement} (role={endRole}, name={endName})"
+            if endNth is not None:
+                target = target.nth(endNth)
+            nth_msg = f", nth={endNth}" if endNth is not None else ""
+            target_desc = f"{endElement} (role={endRole}, name={endName}{nth_msg})"
         elif endSelector:
             target = page.locator(endSelector)
             target_desc = f"{endElement} (selector={endSelector})"

@@ -76,6 +76,7 @@ python src/server.py
     - `role` (string, optional): ARIA role of the element (e.g., 'button', 'link', 'textbox')
     - `name` (string, optional): Accessible name of the element (from snapshot)
     - `selector` (string, optional): CSS selector (fallback if role/name not available)
+    - `nth` (number, optional): Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
     - `doubleClick` (boolean, optional): Whether to perform a double click instead of a single click
     - `button` (string, optional): Button to click, defaults to left
     - `modifiers` (array, optional): Modifier keys to press
@@ -103,10 +104,12 @@ python src/server.py
     - `startRole` (string, optional): ARIA role of source element
     - `startName` (string, optional): Accessible name of source element
     - `startSelector` (string, optional): CSS selector for source (fallback)
+    - `startNth` (number, optional): Zero-based index for source element when multiple match
     - `endElement` (string): Human-readable target element description used to obtain the permission to interact with the element
     - `endRole` (string, optional): ARIA role of target element
     - `endName` (string, optional): Accessible name of target element
     - `endSelector` (string, optional): CSS selector for target (fallback)
+    - `endNth` (number, optional): Zero-based index for target element when multiple match
   - Read-only: **false**
 
 - **browser_evaluate**
@@ -148,6 +151,7 @@ python src/server.py
     - `role` (string, optional): ARIA role of the element (e.g., 'button', 'link', 'textbox')
     - `name` (string, optional): Accessible name of the element (from snapshot)
     - `selector` (string, optional): CSS selector (fallback if role/name not available)
+    - `nth` (number, optional): Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
   - Read-only: **false**
 
 - **browser_navigate**
@@ -200,6 +204,7 @@ python src/server.py
     - `role` (string, optional): ARIA role of the element (typically 'combobox' or 'listbox')
     - `name` (string, optional): Accessible name of the element (from snapshot)
     - `selector` (string, optional): CSS selector (fallback if role/name not available)
+    - `nth` (number, optional): Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
   - Read-only: **false**
 
 - **browser_snapshot**
@@ -227,6 +232,7 @@ python src/server.py
     - `role` (string, optional): ARIA role of the element (e.g., 'textbox', 'searchbox', 'combobox')
     - `name` (string, optional): Accessible name of the element (from snapshot)
     - `selector` (string, optional): CSS selector (fallback if role/name not available)
+    - `nth` (number, optional): Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
     - `submit` (boolean, optional): Whether to submit entered text (press Enter after)
     - `slowly` (boolean, optional): Whether to type one character at a time. Useful for triggering key handlers in the page. By default entire text is filled in at once.
   - Read-only: **false**
