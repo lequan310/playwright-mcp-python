@@ -1,5 +1,4 @@
 import json
-from datetime import datetime
 from typing import Any, Literal, Optional
 from urllib.parse import quote_plus
 
@@ -120,6 +119,39 @@ def get_current_page() -> Optional[Page]:
     return None
 
 
+async def _get_snapshot_result(
+    page: Optional[Page], action_message: str
+) -> dict[str, Any]:
+    """Get browser snapshot with action result message
+
+    Args:
+        page: The page to capture snapshot from
+        action_message: Message describing the action that was performed
+
+    Returns:
+        Dict containing action message, url, title, and snapshot
+    """
+    if not page:
+        return {"error": "No browser page available", "message": action_message}
+
+    try:
+        snapshot = await page.accessibility.snapshot()
+        page_url = page.url
+        page_title = await page.title()
+
+        return {
+            "message": action_message,
+            "url": page_url,
+            "title": page_title,
+            "snapshot": snapshot,
+        }
+    except Exception as e:
+        return {
+            "error": f"Failed to capture snapshot: {str(e)}",
+            "message": action_message,
+        }
+
+
 # Browser Lifecycle Tools
 
 
@@ -146,7 +178,7 @@ async def browser_open(width: int = 1920, height: int = 1080) -> str:
 
 
 @mcp.tool()
-async def browser_navigate(url: str) -> str:
+async def browser_navigate(url: str) -> dict[str, Any]:
     """Navigate to a URL
 
     Args:
@@ -155,22 +187,22 @@ async def browser_navigate(url: str) -> str:
     global headless
     page = await ensure_browser(headless=headless)
     await page.goto(url)
-    return f"Navigated to {url}"
+    return await _get_snapshot_result(page, f"Navigated to {url}")
 
 
 @mcp.tool()
-async def browser_navigate_back() -> str:
+async def browser_navigate_back() -> dict[str, Any]:
     """Go back to the previous page"""
     page = get_current_page()
     if not page:
-        return "No browser page available"
+        return {"error": "No browser page available"}
 
     await page.go_back()
-    return "Navigated back"
+    return await _get_snapshot_result(page, "Navigated back")
 
 
 @mcp.tool()
-async def browser_search(query: str) -> str:
+async def browser_search(query: str) -> dict[str, Any]:
     """Search for a topic using Google search
 
     Args:
@@ -181,7 +213,9 @@ async def browser_search(query: str) -> str:
     encoded_query = quote_plus(query)
     search_url = f"https://www.google.com/search?q={encoded_query}"
     await page.goto(search_url)
-    return f"Searched for '{query}' on Google: {search_url}"
+    return await _get_snapshot_result(
+        page, f"Searched for '{query}' on Google: {search_url}"
+    )
 
 
 @mcp.tool()
@@ -227,15 +261,23 @@ async def browser_resize(width: int, height: int) -> str:
 
 
 @mcp.tool()
-async def browser_snapshot() -> str:
+async def browser_snapshot() -> dict[str, Any]:
     """Capture accessibility snapshot of the current page"""
     page = get_current_page()
     if not page:
-        return "No browser page available"
+        return {"error": "No browser page available"}
 
     # Get accessibility tree snapshot
     snapshot = await page.accessibility.snapshot()
-    return json.dumps(snapshot, indent=2)
+
+    # Get page metadata
+    page_url = page.url
+    page_title = await page.title()
+
+    # Combine all information
+    result = {"url": page_url, "title": page_title, "snapshot": snapshot}
+
+    return result
 
 
 @mcp.tool()
@@ -284,7 +326,7 @@ async def browser_click(
     doubleClick: bool = False,
     button: str = "left",
     modifiers: Optional[list[str]] = None,
-) -> str:
+) -> dict[str, Any]:
     """Perform click on a web page
 
     Args:
@@ -296,7 +338,7 @@ async def browser_click(
     """
     page = get_current_page()
     if not page:
-        return "No browser page available"
+        return {"error": "No browser page available"}
 
     click_options = {"button": button}
     if modifiers:
@@ -304,14 +346,16 @@ async def browser_click(
 
     if doubleClick:
         await page.dblclick(ref, **click_options)
-        return f"Double-clicked on {element}"
+        message = f"Double-clicked on {element}"
     else:
         await page.click(ref, **click_options)
-        return f"Clicked on {element}"
+        message = f"Clicked on {element}"
+
+    return await _get_snapshot_result(page, message)
 
 
 @mcp.tool()
-async def browser_hover(element: str, ref: str) -> str:
+async def browser_hover(element: str, ref: str) -> dict[str, Any]:
     """Hover over element on page
 
     Args:
@@ -320,16 +364,16 @@ async def browser_hover(element: str, ref: str) -> str:
     """
     page = get_current_page()
     if not page:
-        return "No browser page available"
+        return {"error": "No browser page available"}
 
     await page.hover(ref)
-    return f"Hovered over {element}"
+    return await _get_snapshot_result(page, f"Hovered over {element}")
 
 
 @mcp.tool()
 async def browser_type(
     element: str, ref: str, text: str, submit: bool = False, slowly: bool = False
-) -> str:
+) -> dict[str, Any]:
     """Type text into editable element
 
     Args:
@@ -341,7 +385,7 @@ async def browser_type(
     """
     page = get_current_page()
     if not page:
-        return "No browser page available"
+        return {"error": "No browser page available"}
 
     if slowly:
         await page.type(ref, text)
@@ -350,13 +394,15 @@ async def browser_type(
 
     if submit:
         await page.press(ref, "Enter")
-        return f"Typed '{text}' into {element} and submitted"
+        message = f"Typed '{text}' into {element} and submitted"
+    else:
+        message = f"Typed '{text}' into {element}"
 
-    return f"Typed '{text}' into {element}"
+    return await _get_snapshot_result(page, message)
 
 
 @mcp.tool()
-async def browser_press_key(key: str) -> str:
+async def browser_press_key(key: str) -> dict[str, Any]:
     """Press a key on the keyboard
 
     Args:
@@ -364,17 +410,17 @@ async def browser_press_key(key: str) -> str:
     """
     page = get_current_page()
     if not page:
-        return "No browser page available"
+        return {"error": "No browser page available"}
 
     await page.keyboard.press(key)
-    return f"Pressed key: {key}"
+    return await _get_snapshot_result(page, f"Pressed key: {key}")
 
 
 # Form and Selection Tools
 
 
 @mcp.tool()
-async def browser_fill_form(fields: list[dict[str, str]]) -> str:
+async def browser_fill_form(fields: list[dict[str, str]]) -> dict[str, Any]:
     """Fill multiple form fields
 
     Args:
@@ -382,7 +428,7 @@ async def browser_fill_form(fields: list[dict[str, str]]) -> str:
     """
     page = get_current_page()
     if not page:
-        return "No browser page available"
+        return {"error": "No browser page available"}
 
     filled_fields = []
     for field in fields:
@@ -394,11 +440,14 @@ async def browser_fill_form(fields: list[dict[str, str]]) -> str:
             await page.fill(ref, value)
             filled_fields.append(element_desc)
 
-    return f"Filled {len(filled_fields)} fields: {', '.join(filled_fields)}"
+    message = f"Filled {len(filled_fields)} fields: {', '.join(filled_fields)}"
+    return await _get_snapshot_result(page, message)
 
 
 @mcp.tool()
-async def browser_select_option(element: str, ref: str, values: list[str]) -> str:
+async def browser_select_option(
+    element: str, ref: str, values: list[str]
+) -> dict[str, Any]:
     """Select an option in a dropdown
 
     Args:
@@ -408,10 +457,10 @@ async def browser_select_option(element: str, ref: str, values: list[str]) -> st
     """
     page = get_current_page()
     if not page:
-        return "No browser page available"
+        return {"error": "No browser page available"}
 
     await page.select_option(ref, values)
-    return f"Selected {values} in {element}"
+    return await _get_snapshot_result(page, f"Selected {values} in {element}")
 
 
 @mcp.tool()
@@ -443,7 +492,7 @@ async def browser_file_upload(paths: Optional[list[str]] = None) -> str:
 @mcp.tool()
 async def browser_drag(
     startElement: str, startRef: str, endElement: str, endRef: str
-) -> str:
+) -> dict[str, Any]:
     """Perform drag and drop between two elements
 
     Args:
@@ -454,10 +503,12 @@ async def browser_drag(
     """
     page = get_current_page()
     if not page:
-        return "No browser page available"
+        return {"error": "No browser page available"}
 
     await page.drag_and_drop(startRef, endRef)
-    return f"Dragged from {startElement} to {endElement}"
+    return await _get_snapshot_result(
+        page, f"Dragged from {startElement} to {endElement}"
+    )
 
 
 @mcp.tool()

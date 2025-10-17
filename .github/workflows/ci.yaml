@@ -1,0 +1,53 @@
+name: Basic Checks
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "src/**"
+      - ".github/workflows/ci.yaml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "src/**"
+      - ".github/workflows/ci.yaml"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./src
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v4
+
+      - name: Set up ruff
+        uses: astral-sh/ruff-action@v3
+        with:
+          src: "./src"
+
+      - name: Run ruff check and lint
+        run: |
+          ruff check
+          ruff format
+
+  # test:
+  #   needs: lint
+  #   runs-on: ubuntu-latest
+
+  #   steps:
+  #     - name: Checkout the code
+  #       uses: actions/checkout@v4
+
+  #     - name: Set up uv
+  #       uses: astral-sh/setup-uv@v6
+  #       with:
+  #         enable-cache: true
+  #         cache-dependency-glob: "./uv.lock"
+
+  #     - name: Install dependencies
+  #       run: uv sync --locked
+
+  #     - name: Run tests with pytest
+  #       run: uv run pytest
