@@ -1,136 +1,59 @@
-# Playwright MCP Server - Developer Guide
+<!-- GitHub Copilot instructions for contributors and automated coding agents -->
+# Playwright MCP — Agent instructions
 
-## Architecture Overview
+These notes give focused, actionable guidance for AI coding agents working on this repository.
+Keep edits small, preserve style, and reference the concrete files listed below.
 
-This is a **Model Context Protocol (MCP) server** that exposes browser automation via Playwright. Two implementations exist:
+Key files to read first
+- `README.md` — high-level project goals, install/run commands, and tool descriptions (dev: `fastmcp dev src/server.py`; prod: `python src/session_server.py`).
+- `src/server.py` — single-client MCP server implementation; shows role-based locator patterns, snapshot flow, and global browser lifecycle.
+- `src/session_server.py` — multi-client/session variant; session lifecycle, cleanup task, and per-session state are implemented here.
+- `pyproject.toml` — Python requirements (requires Python >= 3.13, dependencies: fastmcp, playwright).
 
-- **`src/server.py`**: Single-client with global state (for local development)
-- **`src/session_server.py`**: Multi-client with session isolation (for production HTTP deployments)
+Big-picture architecture (short)
+- The project exposes an MCP server (FastMCP) that wraps Playwright browser automation as tools. Tools are declared with `@mcp.tool()` (see `server.py` and `session_server.py`).
+- Two entry modes:
+  - `server.py`: single shared browser state (global variables). Simpler, useful for quick testing and inspector (`fastmcp dev`).
+  - `session_server.py`: per-client isolated sessions stored in `sessions` dict with `BrowserSession` dataclass. Use this for concurrent clients and real deployments.
+- Tool outputs prefer structured accessibility snapshots via Playwright's `aria_snapshot()` for action verification rather than raw screenshots.
 
-**Critical distinction**: All tools in `session_server.py` require a `session_id` parameter; `server.py` tools do not.
+Project-specific patterns and conventions
+- Prefer role-based locators when interacting with elements: code uses `page.get_by_role(role, name=name)` before falling back to CSS `selector` (see `browser_click`, `browser_type`, `browser_select_option`). Mimic these in new tools.
+- All tools return structured dictionaries with either `error` keys or `{message, url, title, snapshot}` shapes. Follow this response contract in new tools.
+- Global vs session APIs: `server.py` functions do not accept session IDs and operate on module-level browser state; `session_server.py` functions take a `session_id: str` argument. Keep implementations consistent with the chosen entrypoint.
+- When capturing DOM state, prefer `page.locator("body").aria_snapshot()`; use `browser_get_html` for debug HTML with `filter_tags` (defaults to `['script']`).
 
-## Key Patterns
+Developer workflows and commands (concrete)
+- Create venv with uv (`uv venv --python 3.13`) and install dependencies (`uv sync`) as documented in `README.md`.
+- Install Playwright browser binaries: `playwright install chromium`.
+- Run in development with inspector: `fastmcp dev src/server.py` (opens inspector and allows interactive testing).
+- Run session server (production-like): `python src/session_server.py`.
+- Tests: `pytest` (see `pytest.ini`). Tests expect `pytest-asyncio` and cover async tools; run `uv sync` first to install dev deps.
 
-### 1. Browser State Management
+Integration points and external dependencies
+- Playwright: the code uses `playwright.async_api` extensively; prefer async implementations and use `async_playwright().start()` and `playwright_instance.stop()` lifecycle calls as shown.
+- fastmcp: `FastMCP` registers tools via `@mcp.tool()` decorators. Tool signatures are how the MCP server exposes functions to LLMs — changing signatures affects the external API.
 
-Global state in `server.py`:
-```python
-browser: Optional[Browser] = None
-context: Optional[BrowserContext] = None
-pages: list[Page] = []
-current_page_index: int = 0
-console_messages: list[dict[str, Any]] = []
-network_requests: list[dict[str, Any]] = []
-```
+Edge cases and error handling to follow
+- Always check `get_current_page()` or session page presence and return `{"error": "No browser page available"}` when absent (this pattern is used repeatedly).
+- Resource cleanup: closing contexts and stopping `playwright_instance` is required to avoid orphaned browser processes (see `browser_close` and `cleanup_session`).
+- Session limits: `session_server.py` enforces `MAX_SESSIONS` and background session cleanup (`session_cleanup_task`) — avoid creating unbounded sessions in tests.
 
-Session-isolated state in `session_server.py`:
-```python
-@dataclass
-class BrowserSession:
-    session_id: str
-    browser: Optional[Browser] = None
-    # ... same fields as global state
-```
+Examples to copy/paste when adding tools
+- Role-first click pattern (from `server.py:browser_click`):
+  - If `role` and `name` provided: `locator = page.get_by_role(role, name=name)` then `await locator.click()`.
+  - Else if `selector` provided: `await page.click(selector)`.
+- Snapshot-return contract (from `_get_snapshot_result`):
+  - Return `{"message": <str>, "url": page.url, "title": await page.title(), "snapshot": snapshot}` on success.
 
-### 2. Auto-initialization Pattern
+What not to change
+- Do not change the public tool names or their parameter names (the MCP surface). If you must change them, update `README.md` and note breaking changes.
 
-Browser is lazy-initialized in `session_server.py` to simplify client usage:
-```python
-async def browser_navigate(url: str, session_id: str = "default") -> str:
-    session = get_session(session_id)
-    if session.browser is None:
-        await browser_open(session_id=session_id)  # Auto-open
-    # ... proceed with navigation
-```
+Where to add tests
+- `tests/` — add async tests using `pytest-asyncio`. Mirror the tool contracts: call tool functions and assert snapshot structure or `error` keys.
 
-### 3. Page Listeners Setup
+If parts are unclear
+- Ask for clarification and point to the specific file/line (e.g., "In `src/session_server.py`, lines ~1-120 define BrowserSession: should new tools accept session_id?").
 
-Every new page/tab must have listeners attached in `_setup_page_listeners()`:
-- Console message capture
-- Network request logging
-
-**Always call this when creating new pages** (see `browser_tabs` create action).
-
-### 4. Anti-Detection Configuration
-
-Standard anti-bot configuration applied in `_initialize_browser()`:
-- Custom user agent
-- Disable automation flags via `add_init_script()`
-- Spoof navigator properties (`webdriver`, `plugins`, `languages`)
-
-## Development Workflow
-
-### Running Locally
-```bash
-fastmcp dev server.py  # Single-client mode
-```
-
-### Testing Multi-Client Features
-```bash
-python session_server.py  # Runs with session cleanup task
-```
-
-### Installing Dependencies
-```bash
-uv sync  # Uses pyproject.toml
-playwright install chromium  # Install browser binaries
-```
-
-### Code Formatting
-```bash
-ruff check .  # Linting only (no formatter configured)
-```
-
-## Tool Implementation Guidelines
-
-### Adding New Tools to Both Servers
-
-1. **In `server.py`**: No `session_id` parameter
-```python
-@mcp.tool()
-async def browser_new_feature() -> str:
-    page = get_current_page()
-    if not page:
-        return "No browser page available"
-    # ... implementation
-```
-
-2. **In `session_server.py`**: Add `session_id` parameter
-```python
-@mcp.tool()
-async def browser_new_feature(session_id: str = "default") -> str:
-    session = get_session(session_id)
-    page = get_current_page(session)
-    if not page:
-        return "No browser page available"
-    # ... implementation
-```
-
-### Element Interaction Pattern
-
-All interaction tools use dual parameters:
-- `element`: Human-readable description for permission/logging
-- `ref`: CSS selector or accessibility reference from `browser_snapshot()`
-
-Example: `browser_click(element="Login button", ref="#login-btn")`
-
-## Session Lifecycle (session_server.py)
-
-- **Auto-creation**: First tool call creates session
-- **Timeout**: 30 minutes of inactivity (`SESSION_TIMEOUT`)
-- **Max concurrent**: 10 sessions (`MAX_SESSIONS`)
-- **Cleanup**: Background task runs every 5 minutes (`session_cleanup_task()`)
-- **LRU eviction**: Oldest inactive session removed when limit reached
-
-## Testing Notes
-
-- `tests/` directory exists but is currently empty
-- Dependencies include pytest suite (pytest-asyncio, pytest-cov, pytest-mock)
-- No CI/CD configuration found
-
-## Common Pitfalls
-
-1. **Forgetting session_id**: When porting code between servers, remember to add/remove `session_id` parameter
-2. **Missing page listeners**: New pages need `_setup_page_listeners(page, session)` call
-3. **Browser not closed**: `session_server.py` has auto-cleanup, but explicit `browser_close()` is cleaner
-4. **Screenshot return type**: Returns `Image` object from `fastmcp.utilities.types`, not base64 string
+Feedback request
+- Review these instructions and tell me any missing file references or workflow steps to include. I can iterate quickly.
