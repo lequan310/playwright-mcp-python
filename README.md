@@ -10,6 +10,57 @@ A Model Context Protocol (MCP) server that provides browser automation capabilit
 - ♿ **Accessibility-First**: Interacts with pages the same way screen readers do
 - 🚀 **Playwright-Powered**: Leverages Playwright's robust browser automation
 
+## 🚀 Setup
+
+### Prerequisites
+
+- Python 3.13 or higher
+- [uv](https://github.com/astral-sh/uv) package manager
+
+### Installation
+
+1. Create a virtual environment with Python 3.13:
+```bash
+uv venv --python 3.13
+```
+
+2. Install dependencies:
+```bash
+uv sync
+```
+
+3. Install Playwright browser binaries:
+```bash
+playwright install chromium
+```
+
+## 🏃 Running the Server
+
+### Development Mode (with Inspector)
+
+For local development and testing with the FastMCP inspector:
+
+```bash
+fastmcp dev src/server.py
+```
+
+This launches an interactive inspector where you can test tools and see real-time browser interactions.
+
+### Production Mode
+
+For production deployment with session management:
+
+```bash
+python src/session_server.py
+```
+
+Or for single-client mode:
+
+```bash
+python src/server.py
+```
+
+**Note**: `session_server.py` supports multiple concurrent clients with isolated browser sessions, while `server.py` is designed for single-client usage.
 
 ## Tools
 
