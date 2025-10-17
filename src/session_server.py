@@ -710,12 +710,12 @@ async def browser_fill_form(
     filled_fields = []
     errors = []
 
-    for field in fields:
-        role = field.get("role")
-        name = field.get("name")
-        selector = field.get("selector")
-        value = field.get("value")
-        element_desc = field.get("element", name or selector)
+    for fld in fields:
+        role = fld.get("role")
+        name = fld.get("name")
+        selector = fld.get("selector")
+        value = fld.get("value")
+        element_desc = fld.get("element", name or selector)
 
         if not value:
             continue
