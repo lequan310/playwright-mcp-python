@@ -197,7 +197,7 @@ async def _get_snapshot_result(
         return {"error": "No browser page available", "message": action_message}
 
     try:
-        snapshot = await page.accessibility.snapshot()
+        snapshot = await page.locator("body").aria_snapshot()
         page_url = page.url
         page_title = await page.title()
 
@@ -351,7 +351,7 @@ async def browser_snapshot(session_id: str = "default") -> dict[str, Any]:
     if not page:
         return {"error": "No browser page available"}
 
-    snapshot = await page.accessibility.snapshot()
+    snapshot = await page.locator("body").aria_snapshot()
 
     # Get page metadata
     page_url = page.url
