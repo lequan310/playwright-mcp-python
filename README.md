@@ -1,6 +1,14 @@
-## Playwright MCP
+# Playwright MCP Server
 
-A Model Context Protocol (MCP) server that provides browser automation capabilities using [Playwright](https://playwright.dev). This server enables LLMs to interact with web pages through structured accessibility snapshots, bypassing the need for screenshots or visually-tuned models.
+A Model Context Protocol (MCP) server that provides browser automation capabilities using [Playwright](https://playwright.dev). This server enables LLMs to interact with web pages through **structured accessibility snapshots** and **role-based locators**, bypassing the need for screenshots or visually-tuned models.
+
+## ✨ Key Features
+
+- 🎯 **Role-Based Locators**: Use semantic roles and names from accessibility tree instead of brittle CSS selectors
+- 📸 **Automatic Snapshots**: Every action returns the updated page state automatically
+- 🔒 **Session Management**: Supports multiple concurrent clients with isolated browser sessions
+- ♿ **Accessibility-First**: Interacts with pages the same way screen readers do
+- 🚀 **Playwright-Powered**: Leverages Playwright's robust browser automation
 
 
 ## Tools
@@ -14,7 +22,9 @@ A Model Context Protocol (MCP) server that provides browser automation capabilit
   - Description: Perform click on a web page
   - Parameters:
     - `element` (string): Human-readable element description used to obtain permission to interact with the element
-    - `ref` (string): Exact target element reference from the page snapshot
+    - `role` (string, optional): ARIA role of the element (e.g., 'button', 'link', 'textbox')
+    - `name` (string, optional): Accessible name of the element (from snapshot)
+    - `selector` (string, optional): CSS selector (fallback if role/name not available)
     - `doubleClick` (boolean, optional): Whether to perform a double click instead of a single click
     - `button` (string, optional): Button to click, defaults to left
     - `modifiers` (array, optional): Modifier keys to press
@@ -39,9 +49,13 @@ A Model Context Protocol (MCP) server that provides browser automation capabilit
   - Description: Perform drag and drop between two elements
   - Parameters:
     - `startElement` (string): Human-readable source element description used to obtain the permission to interact with the element
-    - `startRef` (string): Exact source element reference from the page snapshot
+    - `startRole` (string, optional): ARIA role of source element
+    - `startName` (string, optional): Accessible name of source element
+    - `startSelector` (string, optional): CSS selector for source (fallback)
     - `endElement` (string): Human-readable target element description used to obtain the permission to interact with the element
-    - `endRef` (string): Exact target element reference from the page snapshot
+    - `endRole` (string, optional): ARIA role of target element
+    - `endName` (string, optional): Accessible name of target element
+    - `endSelector` (string, optional): CSS selector for target (fallback)
   - Read-only: **false**
 
 - **browser_evaluate**
@@ -50,7 +64,7 @@ A Model Context Protocol (MCP) server that provides browser automation capabilit
   - Parameters:
     - `function` (string): () => { /* code */ } or (element) => { /* code */ } when element is provided
     - `element` (string, optional): Human-readable element description used to obtain permission to interact with the element
-    - `ref` (string, optional): Exact target element reference from the page snapshot
+    - `selector` (string, optional): CSS selector for target element (if evaluating on specific element)
   - Read-only: **false**
 
 - **browser_file_upload**
@@ -80,7 +94,9 @@ A Model Context Protocol (MCP) server that provides browser automation capabilit
   - Description: Hover over element on page
   - Parameters:
     - `element` (string): Human-readable element description used to obtain permission to interact with the element
-    - `ref` (string): Exact target element reference from the page snapshot
+    - `role` (string, optional): ARIA role of the element (e.g., 'button', 'link', 'textbox')
+    - `name` (string, optional): Accessible name of the element (from snapshot)
+    - `selector` (string, optional): CSS selector (fallback if role/name not available)
   - Read-only: **false**
 
 - **browser_navigate**
@@ -129,8 +145,10 @@ A Model Context Protocol (MCP) server that provides browser automation capabilit
   - Description: Select an option in a dropdown
   - Parameters:
     - `element` (string): Human-readable element description used to obtain permission to interact with the element
-    - `ref` (string): Exact target element reference from the page snapshot
     - `values` (array): Array of values to select in the dropdown. This can be a single value or multiple values.
+    - `role` (string, optional): ARIA role of the element (typically 'combobox' or 'listbox')
+    - `name` (string, optional): Accessible name of the element (from snapshot)
+    - `selector` (string, optional): CSS selector (fallback if role/name not available)
   - Read-only: **false**
 
 - **browser_snapshot**
@@ -144,9 +162,8 @@ A Model Context Protocol (MCP) server that provides browser automation capabilit
   - Description: Take a screenshot of the current page. You can't perform actions based on the screenshot, use browser_snapshot for actions.
   - Parameters:
     - `type` (string, optional): Image format for the screenshot. Default is png.
-    - `filename` (string, optional): File name to save the screenshot to. Defaults to `page-{timestamp}.{png|jpeg}` if not specified.
     - `element` (string, optional): Human-readable element description used to obtain permission to screenshot the element. If not provided, the screenshot will be taken of viewport. If element is provided, ref must be provided too.
-    - `ref` (string, optional): Exact target element reference from the page snapshot. If not provided, the screenshot will be taken of viewport. If ref is provided, element must be provided too.
+    - `ref` (string, optional): Exact target element reference (CSS selector) from the page snapshot. If not provided, the screenshot will be taken of viewport. If ref is provided, element must be provided too.
     - `fullPage` (boolean, optional): When true, takes a screenshot of the full scrollable page, instead of the currently visible viewport. Cannot be used with element screenshots.
   - Read-only: **true**
 
@@ -155,8 +172,10 @@ A Model Context Protocol (MCP) server that provides browser automation capabilit
   - Description: Type text into editable element
   - Parameters:
     - `element` (string): Human-readable element description used to obtain permission to interact with the element
-    - `ref` (string): Exact target element reference from the page snapshot
     - `text` (string): Text to type into the element
+    - `role` (string, optional): ARIA role of the element (e.g., 'textbox', 'searchbox', 'combobox')
+    - `name` (string, optional): Accessible name of the element (from snapshot)
+    - `selector` (string, optional): CSS selector (fallback if role/name not available)
     - `submit` (boolean, optional): Whether to submit entered text (press Enter after)
     - `slowly` (boolean, optional): Whether to type one character at a time. Useful for triggering key handlers in the page. By default entire text is filled in at once.
   - Read-only: **false**

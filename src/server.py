@@ -316,13 +316,76 @@ async def browser_take_screenshot(
     return Image(data=screenshot_bytes, format=type)
 
 
+@mcp.tool()
+async def browser_get_html(
+    selector: Optional[str] = None,
+    maxLength: int = 50000,
+    filter_tags: Optional[list[str]] = None,
+) -> str:
+    """Get HTML content for debugging when locators fail
+
+    Args:
+        selector: CSS selector to get HTML from (defaults to body)
+        maxLength: Maximum characters to return (default 50000)
+        filter_tags: List of tag names to remove (e.g., ['script', 'style']). Defaults to ['script']
+    """
+    page = get_current_page()
+    if not page:
+        return json.dumps({"error": "No browser page available"}, indent=2)
+
+    # Default to filtering script tags
+    if filter_tags is None:
+        filter_tags = ["script"]
+
+    try:
+        if selector:
+            element = await page.query_selector(selector)
+            if not element:
+                return json.dumps({"error": f"Element not found: {selector}"}, indent=2)
+            html = await element.inner_html()
+        else:
+            html = await page.inner_html("body")
+
+        # Filter out unwanted tags
+        if filter_tags:
+            import re
+
+            for tag in filter_tags:
+                # Remove opening and closing tags plus content
+                pattern = f"<{tag}\\b[^>]*>.*?</{tag}>"
+                html = re.sub(pattern, "", html, flags=re.DOTALL | re.IGNORECASE)
+
+        # Truncate if too long
+        original_length = len(html)
+        if len(html) > maxLength:
+            html = (
+                html[:maxLength]
+                + f"\n\n... [truncated {len(html) - maxLength} characters]"
+            )
+
+        return json.dumps(
+            {
+                "selector": selector or "body",
+                "html": html,
+                "length": len(html),
+                "original_length": original_length,
+                "filtered_tags": filter_tags,
+            },
+            indent=2,
+        )
+    except Exception as e:
+        return json.dumps({"error": f"Failed to get HTML: {str(e)}"}, indent=2)
+
+
 # Interaction Tools
 
 
 @mcp.tool()
 async def browser_click(
     element: str,
-    ref: str,
+    role: Optional[str] = None,
+    name: Optional[str] = None,
+    selector: Optional[str] = None,
     doubleClick: bool = False,
     button: str = "left",
     modifiers: Optional[list[str]] = None,
@@ -331,7 +394,9 @@ async def browser_click(
 
     Args:
         element: Human-readable element description
-        ref: Exact target element reference from the page snapshot
+        role: ARIA role of the element (e.g., 'button', 'link', 'textbox')
+        name: Accessible name of the element (from snapshot)
+        selector: CSS selector (fallback if role/name not available)
         doubleClick: Whether to perform a double click
         button: Button to click (left, right, middle)
         modifiers: Modifier keys to press (Alt, Control, Meta, Shift)
@@ -344,42 +409,84 @@ async def browser_click(
     if modifiers:
         click_options["modifiers"] = modifiers
 
-    if doubleClick:
-        await page.dblclick(ref, **click_options)
-        message = f"Double-clicked on {element}"
-    else:
-        await page.click(ref, **click_options)
-        message = f"Clicked on {element}"
+    try:
+        # Prefer role-based locators (more reliable)
+        if role and name:
+            locator = page.get_by_role(role, name=name)
+            if doubleClick:
+                await locator.dblclick(**click_options)
+                message = f"Double-clicked on {element} (role={role}, name={name})"
+            else:
+                await locator.click(**click_options)
+                message = f"Clicked on {element} (role={role}, name={name})"
+        elif selector:
+            if doubleClick:
+                await page.dblclick(selector, **click_options)
+                message = f"Double-clicked on {element} (selector={selector})"
+            else:
+                await page.click(selector, **click_options)
+                message = f"Clicked on {element} (selector={selector})"
+        else:
+            return {"error": "Must provide either (role + name) or selector"}
 
-    return await _get_snapshot_result(page, message)
+        return await _get_snapshot_result(page, message)
+    except Exception as e:
+        return {"error": f"Failed to click: {str(e)}", "element": element}
 
 
 @mcp.tool()
-async def browser_hover(element: str, ref: str) -> dict[str, Any]:
+async def browser_hover(
+    element: str,
+    role: Optional[str] = None,
+    name: Optional[str] = None,
+    selector: Optional[str] = None,
+) -> dict[str, Any]:
     """Hover over element on page
 
     Args:
         element: Human-readable element description
-        ref: Exact target element reference from the page snapshot
+        role: ARIA role of the element (e.g., 'button', 'link', 'textbox')
+        name: Accessible name of the element (from snapshot)
+        selector: CSS selector (fallback if role/name not available)
     """
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
 
-    await page.hover(ref)
-    return await _get_snapshot_result(page, f"Hovered over {element}")
+    try:
+        # Prefer role-based locators
+        if role and name:
+            await page.get_by_role(role, name=name).hover()
+            message = f"Hovered over {element} (role={role}, name={name})"
+        elif selector:
+            await page.hover(selector)
+            message = f"Hovered over {element} (selector={selector})"
+        else:
+            return {"error": "Must provide either (role + name) or selector"}
+
+        return await _get_snapshot_result(page, message)
+    except Exception as e:
+        return {"error": f"Failed to hover: {str(e)}", "element": element}
 
 
 @mcp.tool()
 async def browser_type(
-    element: str, ref: str, text: str, submit: bool = False, slowly: bool = False
+    element: str,
+    text: str,
+    role: Optional[str] = None,
+    name: Optional[str] = None,
+    selector: Optional[str] = None,
+    submit: bool = False,
+    slowly: bool = False,
 ) -> dict[str, Any]:
     """Type text into editable element
 
     Args:
         element: Human-readable element description
-        ref: Exact target element reference from the page snapshot
         text: Text to type into the element
+        role: ARIA role of the element (e.g., 'textbox', 'searchbox', 'combobox')
+        name: Accessible name of the element (from snapshot)
+        selector: CSS selector (fallback if role/name not available)
         submit: Whether to submit (press Enter after)
         slowly: Whether to type one character at a time
     """
@@ -387,18 +494,39 @@ async def browser_type(
     if not page:
         return {"error": "No browser page available"}
 
-    if slowly:
-        await page.type(ref, text)
-    else:
-        await page.fill(ref, text)
+    try:
+        # Prefer role-based locators
+        if role and name:
+            locator = page.get_by_role(role, name=name)
+            if slowly:
+                await locator.type(text)
+            else:
+                await locator.fill(text)
 
-    if submit:
-        await page.press(ref, "Enter")
-        message = f"Typed '{text}' into {element} and submitted"
-    else:
-        message = f"Typed '{text}' into {element}"
+            if submit:
+                await locator.press("Enter")
+                message = f"Typed '{text}' into {element} and submitted (role={role}, name={name})"
+            else:
+                message = f"Typed '{text}' into {element} (role={role}, name={name})"
+        elif selector:
+            if slowly:
+                await page.type(selector, text)
+            else:
+                await page.fill(selector, text)
 
-    return await _get_snapshot_result(page, message)
+            if submit:
+                await page.press(selector, "Enter")
+                message = (
+                    f"Typed '{text}' into {element} and submitted (selector={selector})"
+                )
+            else:
+                message = f"Typed '{text}' into {element} (selector={selector})"
+        else:
+            return {"error": "Must provide either (role + name) or selector"}
+
+        return await _get_snapshot_result(page, message)
+    except Exception as e:
+        return {"error": f"Failed to type: {str(e)}", "element": element}
 
 
 @mcp.tool()
@@ -424,43 +552,78 @@ async def browser_fill_form(fields: list[dict[str, str]]) -> dict[str, Any]:
     """Fill multiple form fields
 
     Args:
-        fields: List of fields to fill, each with 'ref', 'element', and 'value'
+        fields: List of fields to fill, each with 'element', 'value', and either ('role' + 'name') or 'selector'
     """
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
 
     filled_fields = []
-    for field in fields:
-        ref = field.get("ref")
-        value = field.get("value")
-        element_desc = field.get("element", ref)
+    errors = []
 
-        if ref and value:
-            await page.fill(ref, value)
-            filled_fields.append(element_desc)
+    for field in fields:
+        role = field.get("role")
+        name = field.get("name")
+        selector = field.get("selector")
+        value = field.get("value")
+        element_desc = field.get("element", name or selector)
+
+        if not value:
+            continue
+
+        try:
+            if role and name:
+                await page.get_by_role(role, name=name).fill(value)
+                filled_fields.append(f"{element_desc} (role={role})")
+            elif selector:
+                await page.fill(selector, value)
+                filled_fields.append(f"{element_desc} (selector)")
+            else:
+                errors.append(f"{element_desc}: missing role+name or selector")
+        except Exception as e:
+            errors.append(f"{element_desc}: {str(e)}")
 
     message = f"Filled {len(filled_fields)} fields: {', '.join(filled_fields)}"
+    if errors:
+        message += f"\nErrors: {'; '.join(errors)}"
+
     return await _get_snapshot_result(page, message)
 
 
 @mcp.tool()
 async def browser_select_option(
-    element: str, ref: str, values: list[str]
+    element: str,
+    values: list[str],
+    role: Optional[str] = None,
+    name: Optional[str] = None,
+    selector: Optional[str] = None,
 ) -> dict[str, Any]:
     """Select an option in a dropdown
 
     Args:
         element: Human-readable element description
-        ref: Exact target element reference from the page snapshot
         values: Array of values to select
+        role: ARIA role of the element (typically 'combobox' or 'listbox')
+        name: Accessible name of the element (from snapshot)
+        selector: CSS selector (fallback if role/name not available)
     """
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
 
-    await page.select_option(ref, values)
-    return await _get_snapshot_result(page, f"Selected {values} in {element}")
+    try:
+        if role and name:
+            await page.get_by_role(role, name=name).select_option(values)
+            message = f"Selected {values} in {element} (role={role}, name={name})"
+        elif selector:
+            await page.select_option(selector, values)
+            message = f"Selected {values} in {element} (selector={selector})"
+        else:
+            return {"error": "Must provide either (role + name) or selector"}
+
+        return await _get_snapshot_result(page, message)
+    except Exception as e:
+        return {"error": f"Failed to select option: {str(e)}", "element": element}
 
 
 @mcp.tool()
@@ -491,51 +654,96 @@ async def browser_file_upload(paths: Optional[list[str]] = None) -> str:
 
 @mcp.tool()
 async def browser_drag(
-    startElement: str, startRef: str, endElement: str, endRef: str
+    startElement: str,
+    endElement: str,
+    startRole: Optional[str] = None,
+    startName: Optional[str] = None,
+    startSelector: Optional[str] = None,
+    endRole: Optional[str] = None,
+    endName: Optional[str] = None,
+    endSelector: Optional[str] = None,
 ) -> dict[str, Any]:
     """Perform drag and drop between two elements
 
     Args:
         startElement: Human-readable source element description
-        startRef: Exact source element reference
         endElement: Human-readable target element description
-        endRef: Exact target element reference
+        startRole: ARIA role of source element
+        startName: Accessible name of source element
+        startSelector: CSS selector for source (fallback)
+        endRole: ARIA role of target element
+        endName: Accessible name of target element
+        endSelector: CSS selector for target (fallback)
     """
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
 
-    await page.drag_and_drop(startRef, endRef)
-    return await _get_snapshot_result(
-        page, f"Dragged from {startElement} to {endElement}"
-    )
+    try:
+        # Determine source locator
+        if startRole and startName:
+            source = page.get_by_role(startRole, name=startName)
+            source_desc = f"{startElement} (role={startRole}, name={startName})"
+        elif startSelector:
+            source = page.locator(startSelector)
+            source_desc = f"{startElement} (selector={startSelector})"
+        else:
+            return {
+                "error": "Must provide either (startRole + startName) or startSelector"
+            }
+
+        # Determine target locator
+        if endRole and endName:
+            target = page.get_by_role(endRole, name=endName)
+            target_desc = f"{endElement} (role={endRole}, name={endName})"
+        elif endSelector:
+            target = page.locator(endSelector)
+            target_desc = f"{endElement} (selector={endSelector})"
+        else:
+            return {"error": "Must provide either (endRole + endName) or endSelector"}
+
+        await source.drag_to(target)
+        return await _get_snapshot_result(
+            page, f"Dragged from {source_desc} to {target_desc}"
+        )
+    except Exception as e:
+        return {
+            "error": f"Failed to drag: {str(e)}",
+            "startElement": startElement,
+            "endElement": endElement,
+        }
 
 
 @mcp.tool()
 async def browser_evaluate(
-    function: str, element: Optional[str] = None, ref: Optional[str] = None
+    function: str,
+    element: Optional[str] = None,
+    selector: Optional[str] = None,
 ) -> str:
     """Evaluate JavaScript expression on page or element
 
     Args:
         function: JavaScript function as string (e.g., "() => document.title")
         element: Human-readable element description
-        ref: Exact target element reference
+        selector: CSS selector for target element (if evaluating on specific element)
     """
     page = get_current_page()
     if not page:
         return "No browser page available"
 
-    if element and ref:
-        element_handle = await page.query_selector(ref)
-        if element_handle:
-            result = await element_handle.evaluate(function)
+    try:
+        if element and selector:
+            element_handle = await page.query_selector(selector)
+            if element_handle:
+                result = await element_handle.evaluate(function)
+            else:
+                return json.dumps({"error": f"Element not found: {selector}"}, indent=2)
         else:
-            return f"Element not found: {ref}"
-    else:
-        result = await page.evaluate(function)
+            result = await page.evaluate(function)
 
-    return json.dumps(result, indent=2)
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return json.dumps({"error": f"Failed to evaluate: {str(e)}"}, indent=2)
 
 
 @mcp.tool()
