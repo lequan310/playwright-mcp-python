@@ -3,7 +3,7 @@ from typing import Optional, Union
 from pydantic import BaseModel, Field
 
 
-class AriaLabel(BaseModel):
+class AriaNode(BaseModel):
     role: str = Field(
         ..., description="ARIA role of the element (e.g., 'button', 'link', 'textbox')"
     )
@@ -17,7 +17,7 @@ class Selector(BaseModel):
 
 
 # Union type for element locators
-ElementLocator = Union[AriaLabel, Selector]
+ElementLocator = Union[AriaNode, Selector]
 
 
 class FormField(BaseModel):
@@ -26,7 +26,7 @@ class FormField(BaseModel):
     element: str = Field(..., description="Human-readable element description")
     value: str = Field(..., description="Value to fill in the field")
     locator: ElementLocator = Field(
-        ..., description="Element locator (AriaLabel or Selector)"
+        ..., description="Element locator (AriaNode or Selector)"
     )
     nth: Optional[int] = Field(
         None, description="Zero-based index when multiple elements match"

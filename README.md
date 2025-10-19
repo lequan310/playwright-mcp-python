@@ -73,7 +73,7 @@ python src/server.py
   - Description: Perform click on a web page
   - Parameters:
     - `element` (string): Human-readable element description
-    - `locator` (ElementLocator): Element locator - either AriaLabel with `role` and `name` fields, or Selector with `selector` field
+    - `locator` (ElementLocator): Element locator - either AriaNode with ARIA `role` and `name` fields, or Selector with `selector` field
     - `nth` (number, optional): Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
     - `double_click` (boolean, optional): Whether to perform a double click instead of a single click
     - `button` (string, optional): Button to click (left, right, middle), defaults to left
@@ -91,10 +91,10 @@ python src/server.py
   - Description: Perform drag and drop between two elements
   - Parameters:
     - `start_element` (string): Human-readable source element description
-    - `start_locator` (ElementLocator): Source element locator - either AriaLabel with `role` and `name` fields, or Selector with `selector` field
+    - `start_locator` (ElementLocator): Source element locator - either AriaNode with ARIA `role` and `name` fields, or Selector with `selector` field
     - `start_nth` (number, optional): Zero-based index for source element when multiple match
     - `end_element` (string): Human-readable target element description
-    - `end_locator` (ElementLocator): Target element locator - either AriaLabel with `role` and `name` fields, or Selector with `selector` field
+    - `end_locator` (ElementLocator): Target element locator - either AriaNode with ARIA `role` and `name` fields, or Selector with `selector` field
     - `end_nth` (number, optional): Zero-based index for target element when multiple match
   - Read-only: **false**
 
@@ -126,7 +126,7 @@ python src/server.py
   - Description: Hover over element on page
   - Parameters:
     - `element` (string): Human-readable element description
-    - `locator` (ElementLocator): Element locator - either AriaLabel with `role` and `name` fields, or Selector with `selector` field
+    - `locator` (ElementLocator): Element locator - either AriaNode with ARIA `role` and `name` fields, or Selector with `selector` field
     - `nth` (number, optional): Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
   - Read-only: **false**
 
@@ -177,7 +177,7 @@ python src/server.py
   - Parameters:
     - `element` (string): Human-readable element description
     - `values` (array): Array of values to select in the dropdown
-    - `locator` (ElementLocator): Element locator - either AriaLabel with `role` and `name` fields, or Selector with `selector` field
+    - `locator` (ElementLocator): Element locator - either AriaNode with ARIA ARIA `role` and `name` fields, or Selector with `selector` field
     - `nth` (number, optional): Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
   - Read-only: **false**
 
@@ -203,7 +203,7 @@ python src/server.py
   - Parameters:
     - `element` (string): Human-readable element description
     - `text` (string): Text to type into the element
-    - `locator` (ElementLocator): Element locator - either AriaLabel with `role` and `name` fields, or Selector with `selector` field
+    - `locator` (ElementLocator): Element locator - either AriaNode with ARIA `role` and `name` fields, or Selector with `selector` field
     - `nth` (number, optional): Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
     - `submit` (boolean, optional): Whether to submit (press Enter after)
     - `slowly` (boolean, optional): Whether to type one character at a time

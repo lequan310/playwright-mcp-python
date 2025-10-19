@@ -12,7 +12,7 @@ from patchright.async_api import (
     async_playwright,
 )
 
-from schemas.element import AriaLabel, ElementLocator, FormField, Selector
+from schemas.element import AriaNode, ElementLocator, FormField, Selector
 
 mcp = FastMCP("Playwright MCP Server")
 
@@ -136,13 +136,13 @@ def _get_locator(page: Page, locator: ElementLocator, nth: Optional[int] = None)
 
     Args:
         page: The page to create the locator on
-        locator: ElementLocator (AriaLabel or Selector)
+        locator: ElementLocator (AriaNode or Selector)
         nth: Optional zero-based index when multiple elements match
 
     Returns:
         tuple: (playwright_locator, description_string)
     """
-    if isinstance(locator, AriaLabel):
+    if isinstance(locator, AriaNode):
         playwright_locator = page.get_by_role(locator.role, name=locator.name)
         if nth is not None:
             playwright_locator = playwright_locator.nth(nth)
@@ -430,7 +430,7 @@ async def browser_click(
 
     Args:
         element: Human-readable element description
-        locator: Element locator (AriaLabel with role/name or Selector with CSS/XPath selector)
+        locator: Element locator (AriaNode with ARIA role & name or Selector with CSS/XPath selector)
         nth: Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
         double_click: Whether to perform a double click
         button: Button to click (left, right, middle)
@@ -469,7 +469,7 @@ async def browser_hover(
 
     Args:
         element: Human-readable element description
-        locator: Element locator (AriaLabel with role/name or Selector with CSS/XPath selector)
+        locator: Element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)
         nth: Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
     """
     page = get_current_page()
@@ -500,7 +500,7 @@ async def browser_type(
     Args:
         element: Human-readable element description
         text: Text to type into the element
-        locator: Element locator (AriaLabel with role/name or Selector with CSS/XPath selector)
+        locator: Element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)
         nth: Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
         submit: Whether to submit (press Enter after)
         slowly: Whether to type one character at a time
@@ -587,7 +587,7 @@ async def browser_select_option(
     Args:
         element: Human-readable element description
         values: Array of values to select
-        locator: Element locator (AriaLabel with role/name or Selector with CSS/XPath selector)
+        locator: Element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)
         nth: Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
     """
     page = get_current_page()
@@ -644,8 +644,8 @@ async def browser_drag(
     Args:
         start_element: Human-readable source element description
         end_element: Human-readable target element description
-        start_locator: Source element locator (AriaLabel with role/name or Selector with CSS/XPath selector)
-        end_locator: Target element locator (AriaLabel with role/name or Selector with CSS/XPath selector)
+        start_locator: Source element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)
+        end_locator: Target element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)
         start_nth: Zero-based index for source element when multiple match
         end_nth: Zero-based index for target element when multiple match
     """
