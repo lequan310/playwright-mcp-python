@@ -1,5 +1,5 @@
 import json
-from typing import Any, Literal, Optional
+from typing import Annotated, Any, Literal, Optional
 from urllib.parse import quote_plus
 
 from fastmcp import FastMCP
@@ -215,12 +215,10 @@ async def browser_open() -> str:
 
 
 @mcp.tool()
-async def browser_navigate(url: str) -> dict[str, Any]:
-    """Navigate to a URL
-
-    Args:
-        url: The URL to navigate to
-    """
+async def browser_navigate(
+    url: Annotated[str, "The URL to navigate to"],
+) -> dict[str, Any]:
+    """Navigate to a URL"""
     global headless
     page = await ensure_browser(headless=headless)
     await page.goto(url)
@@ -239,12 +237,10 @@ async def browser_navigate_back() -> dict[str, Any]:
 
 
 @mcp.tool()
-async def browser_search(query: str) -> dict[str, Any]:
-    """Search for a topic using Google search
-
-    Args:
-        query: The search query or topic to search for
-    """
+async def browser_search(
+    query: Annotated[str, "The search query or topic to search for"],
+) -> dict[str, Any]:
+    """Search for a topic using Google search"""
     global headless
     page = await ensure_browser(headless=headless)
     encoded_query = quote_plus(query)
@@ -279,13 +275,11 @@ async def browser_close() -> str:
 
 
 @mcp.tool()
-async def browser_resize(width: int, height: int) -> str:
-    """Resize the browser window
-
-    Args:
-        width: Width of the browser window
-        height: Height of the browser window
-    """
+async def browser_resize(
+    width: Annotated[int, "Width of the browser window"],
+    height: Annotated[int, "Height of the browser window"],
+) -> str:
+    """Resize the browser window"""
     page = get_current_page()
     if not page:
         return "No browser page available"
@@ -299,7 +293,7 @@ async def browser_resize(width: int, height: int) -> str:
 
 @mcp.tool()
 async def browser_snapshot() -> dict[str, Any]:
-    """Capture accessibility snapshot of the current page"""
+    """Capture accessibility snapshot of the current page. Use this tool in case the you think the web did not fully load previously."""
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
@@ -319,32 +313,29 @@ async def browser_snapshot() -> dict[str, Any]:
 
 @mcp.tool()
 async def browser_take_screenshot(
-    type: str = "png",
-    element: Optional[str] = None,
-    ref: Optional[str] = None,
-    full_page: bool = False,
+    type: Annotated[str, "Image format (png or jpeg)"] = "png",
+    element: Annotated[Optional[str], "Human-readable element description"] = None,
+    locator: Annotated[
+        Optional[ElementLocator],
+        "Element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)",
+    ] = None,
+    nth: Annotated[
+        Optional[int],
+        "Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)",
+    ] = None,
+    full_page: Annotated[bool, "Take screenshot of full scrollable page"] = False,
 ) -> Image:
-    """Take a screenshot of the current page
-
-    Args:
-        type: Image format (png or jpeg)
-        element: Human-readable element description
-        ref: Exact target element reference from the page snapshot
-        full_page: Take screenshot of full scrollable page
-    """
+    """Take a screenshot of the current page"""
     page = get_current_page()
     if not page:
         raise ValueError("No browser page available")
 
     screenshot_options = {"type": type}
 
-    if element and ref:
+    if element and locator:
         # Screenshot specific element
-        element_handle = await page.query_selector(ref)
-        if element_handle:
-            screenshot_bytes = await element_handle.screenshot(**screenshot_options)
-        else:
-            raise ValueError(f"Element not found: {ref}")
+        playwright_locator, desc = _get_locator(page, locator, nth)
+        screenshot_bytes = await playwright_locator.screenshot(**screenshot_options)
     else:
         # Screenshot full page or viewport
         screenshot_options["full_page"] = full_page
@@ -355,17 +346,16 @@ async def browser_take_screenshot(
 
 @mcp.tool()
 async def browser_get_html(
-    selector: Optional[str] = None,
-    max_length: int = 50000,
-    filter_tags: Optional[list[str]] = None,
+    selector: Annotated[
+        Optional[str], "CSS selector to get HTML from (defaults to body)"
+    ] = None,
+    max_length: Annotated[int, "Maximum characters to return"] = 50000,
+    filter_tags: Annotated[
+        Optional[list[str]],
+        "List of tag names to remove (e.g., ['script', 'style']). Defaults to ['script']",
+    ] = None,
 ) -> str:
-    """Get HTML content for debugging when locators fail
-
-    Args:
-        selector: CSS selector to get HTML from (defaults to body)
-        max_length: Maximum characters to return (default 50000)
-        filter_tags: List of tag names to remove (e.g., ['script', 'style']). Defaults to ['script']
-    """
+    """Get HTML content for debugging when locators fail"""
     page = get_current_page()
     if not page:
         return json.dumps({"error": "No browser page available"}, indent=2)
@@ -419,23 +409,22 @@ async def browser_get_html(
 
 @mcp.tool()
 async def browser_click(
-    element: str,
-    locator: ElementLocator,
-    nth: Optional[int] = None,
-    double_click: bool = False,
-    button: str = "left",
-    modifiers: Optional[list[str]] = None,
+    element: Annotated[str, "Human-readable element description"],
+    locator: Annotated[
+        ElementLocator,
+        "Element locator (AriaNode with ARIA role & name or Selector with CSS/XPath selector)",
+    ],
+    nth: Annotated[
+        Optional[int],
+        "Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)",
+    ] = None,
+    double_click: Annotated[bool, "Whether to perform a double click"] = False,
+    button: Annotated[str, "Button to click (left, right, middle)"] = "left",
+    modifiers: Annotated[
+        Optional[list[str]], "Modifier keys to press (Alt, Control, Meta, Shift)"
+    ] = None,
 ) -> dict[str, Any]:
-    """Perform click on a web page
-
-    Args:
-        element: Human-readable element description
-        locator: Element locator (AriaNode with ARIA role & name or Selector with CSS/XPath selector)
-        nth: Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
-        double_click: Whether to perform a double click
-        button: Button to click (left, right, middle)
-        modifiers: Modifier keys to press (Alt, Control, Meta, Shift)
-    """
+    """Perform click on a web page"""
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
@@ -461,17 +450,17 @@ async def browser_click(
 
 @mcp.tool()
 async def browser_hover(
-    element: str,
-    locator: ElementLocator,
-    nth: Optional[int] = None,
+    element: Annotated[str, "Human-readable element description"],
+    locator: Annotated[
+        ElementLocator,
+        "Element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)",
+    ],
+    nth: Annotated[
+        Optional[int],
+        "Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)",
+    ] = None,
 ) -> dict[str, Any]:
-    """Hover over element on page
-
-    Args:
-        element: Human-readable element description
-        locator: Element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)
-        nth: Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
-    """
+    """Hover over element on page"""
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
@@ -488,23 +477,20 @@ async def browser_hover(
 
 @mcp.tool()
 async def browser_type(
-    element: str,
-    text: str,
-    locator: ElementLocator,
-    nth: Optional[int] = None,
-    submit: bool = False,
-    slowly: bool = False,
+    element: Annotated[str, "Human-readable element description"],
+    text: Annotated[str, "Text to type into the element"],
+    locator: Annotated[
+        ElementLocator,
+        "Element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)",
+    ],
+    nth: Annotated[
+        Optional[int],
+        "Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)",
+    ] = None,
+    submit: Annotated[bool, "Whether to submit (press Enter after)"] = False,
+    slowly: Annotated[bool, "Whether to type one character at a time"] = False,
 ) -> dict[str, Any]:
-    """Type text into editable element
-
-    Args:
-        element: Human-readable element description
-        text: Text to type into the element
-        locator: Element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)
-        nth: Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
-        submit: Whether to submit (press Enter after)
-        slowly: Whether to type one character at a time
-    """
+    """Type text into editable element"""
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
@@ -529,12 +515,10 @@ async def browser_type(
 
 
 @mcp.tool()
-async def browser_press_key(key: str) -> dict[str, Any]:
-    """Press a key on the keyboard
-
-    Args:
-        key: Name of the key to press (e.g., ArrowLeft, a, Enter)
-    """
+async def browser_press_key(
+    key: Annotated[str, "Name of the key to press (e.g., ArrowLeft, a, Enter)"],
+) -> dict[str, Any]:
+    """Press a key on the keyboard"""
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
@@ -547,12 +531,13 @@ async def browser_press_key(key: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-async def browser_fill_form(fields: list[FormField]) -> dict[str, Any]:
-    """Fill multiple form fields
-
-    Args:
-        fields: List of FormField objects, each with element description, value, locator, and optional nth index
-    """
+async def browser_fill_form(
+    fields: Annotated[
+        list[FormField],
+        "List of FormField objects, each with element description, value, locator, and optional nth index",
+    ],
+) -> dict[str, Any]:
+    """Fill multiple form fields"""
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
@@ -577,19 +562,18 @@ async def browser_fill_form(fields: list[FormField]) -> dict[str, Any]:
 
 @mcp.tool()
 async def browser_select_option(
-    element: str,
-    values: list[str],
-    locator: ElementLocator,
-    nth: Optional[int] = None,
+    element: Annotated[str, "Human-readable element description"],
+    values: Annotated[list[str], "Array of values to select"],
+    locator: Annotated[
+        ElementLocator,
+        "Element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)",
+    ],
+    nth: Annotated[
+        Optional[int],
+        "Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)",
+    ] = None,
 ) -> dict[str, Any]:
-    """Select an option in a dropdown
-
-    Args:
-        element: Human-readable element description
-        values: Array of values to select
-        locator: Element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)
-        nth: Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
-    """
+    """Select an option in a dropdown"""
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
@@ -605,12 +589,13 @@ async def browser_select_option(
 
 
 @mcp.tool()
-async def browser_file_upload(paths: Optional[list[str]] = None) -> str:
-    """Upload one or multiple files
-
-    Args:
-        paths: Absolute paths to files to upload. If omitted, file chooser is cancelled.
-    """
+async def browser_file_upload(
+    paths: Annotated[
+        Optional[list[str]],
+        "Absolute paths to files to upload. If omitted, file chooser is cancelled.",
+    ] = None,
+) -> str:
+    """Upload one or multiple files"""
     page = get_current_page()
     if not page:
         return "No browser page available"
@@ -632,23 +617,24 @@ async def browser_file_upload(paths: Optional[list[str]] = None) -> str:
 
 @mcp.tool()
 async def browser_drag(
-    start_element: str,
-    end_element: str,
-    start_locator: ElementLocator,
-    end_locator: ElementLocator,
-    start_nth: Optional[int] = None,
-    end_nth: Optional[int] = None,
+    start_element: Annotated[str, "Human-readable source element description"],
+    end_element: Annotated[str, "Human-readable target element description"],
+    start_locator: Annotated[
+        ElementLocator,
+        "Source element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)",
+    ],
+    end_locator: Annotated[
+        ElementLocator,
+        "Target element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)",
+    ],
+    start_nth: Annotated[
+        Optional[int], "Zero-based index for source element when multiple match"
+    ] = None,
+    end_nth: Annotated[
+        Optional[int], "Zero-based index for target element when multiple match"
+    ] = None,
 ) -> dict[str, Any]:
-    """Perform drag and drop between two elements
-
-    Args:
-        start_element: Human-readable source element description
-        end_element: Human-readable target element description
-        start_locator: Source element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)
-        end_locator: Target element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)
-        start_nth: Zero-based index for source element when multiple match
-        end_nth: Zero-based index for target element when multiple match
-    """
+    """Perform drag and drop between two elements"""
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
@@ -791,14 +777,13 @@ async def browser_drag(
 
 @mcp.tool()
 async def browser_tabs(
-    action: Literal["list", "create", "close", "select"], index: Optional[int] = None
+    action: Annotated[
+        Literal["list", "create", "close", "select"],
+        "Operation to perform (list, create, close, select)",
+    ],
+    index: Annotated[Optional[int], "Tab index for close/select operations"] = None,
 ) -> str:
-    """List, create, close, or select a browser tab
-
-    Args:
-        action: Operation to perform (list, create, close, select)
-        index: Tab index for close/select operations
-    """
+    """List, create, close, or select a browser tab"""
     global pages, current_page_index, context, headless
 
     if action == "list":

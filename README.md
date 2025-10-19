@@ -193,7 +193,8 @@ python src/server.py
   - Parameters:
     - `type` (string, optional): Image format (png or jpeg). Default is png.
     - `element` (string, optional): Human-readable element description
-    - `ref` (string, optional): Exact target element reference (CSS selector) from the page snapshot
+    - `locator` (ElementLocator, optional): Element locator - either AriaNode with ARIA `role` and `name` fields, or Selector with `selector` field
+    - `nth` (number, optional): Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
     - `full_page` (boolean, optional): Take screenshot of full scrollable page
   - Read-only: **true**
 

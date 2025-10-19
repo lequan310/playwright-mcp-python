@@ -8,7 +8,7 @@ import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional
 
 from fastmcp import FastMCP
 from fastmcp.utilities.types import Image
@@ -257,13 +257,11 @@ async def _get_snapshot_result(
 
 
 @mcp.tool()
-async def browser_open(session_id: str = "default", headless: bool = True) -> str:
-    """Open a new browser instance for this session
-
-    Args:
-        session_id: Unique identifier for this client session
-        headless: Whether to run browser in headless mode
-    """
+async def browser_open(
+    session_id: Annotated[str, "Unique identifier for this client session"] = "default",
+    headless: Annotated[bool, "Whether to run browser in headless mode"] = True,
+) -> str:
+    """Open a new browser instance for this session"""
     session = get_session(session_id)
 
     if session.browser is not None:
@@ -276,12 +274,10 @@ async def browser_open(session_id: str = "default", headless: bool = True) -> st
 
 
 @mcp.tool()
-async def browser_close(session_id: str = "default") -> str:
-    """Close the browser and clean up all resources for this session
-
-    Args:
-        session_id: Unique identifier for this client session
-    """
+async def browser_close(
+    session_id: Annotated[str, "Unique identifier for this client session"] = "default",
+) -> str:
+    """Close the browser and clean up all resources for this session"""
     await cleanup_session(session_id)
     return f"Browser closed and resources cleaned up for session {session_id}"
 
@@ -290,13 +286,11 @@ async def browser_close(session_id: str = "default") -> str:
 
 
 @mcp.tool()
-async def browser_navigate(url: str, session_id: str = "default") -> Dict[str, Any]:
-    """Navigate to a URL
-
-    Args:
-        url: The URL to navigate to
-        session_id: Unique identifier for this client session
-    """
+async def browser_navigate(
+    url: Annotated[str, "The URL to navigate to"],
+    session_id: Annotated[str, "Unique identifier for this client session"] = "default",
+) -> Dict[str, Any]:
+    """Navigate to a URL"""
     session = get_session(session_id)
 
     if session.browser is None:
@@ -310,12 +304,10 @@ async def browser_navigate(url: str, session_id: str = "default") -> Dict[str, A
 
 
 @mcp.tool()
-async def browser_navigate_back(session_id: str = "default") -> Dict[str, Any]:
-    """Go back to the previous page
-
-    Args:
-        session_id: Unique identifier for this client session
-    """
+async def browser_navigate_back(
+    session_id: Annotated[str, "Unique identifier for this client session"] = "default",
+) -> Dict[str, Any]:
+    """Go back to the previous page"""
     session = get_session(session_id)
     page = get_current_page(session)
 
@@ -349,14 +341,12 @@ async def browser_navigate_back(session_id: str = "default") -> Dict[str, Any]:
 
 
 @mcp.tool()
-async def browser_resize(width: int, height: int, session_id: str = "default") -> str:
-    """Resize the browser window
-
-    Args:
-        width: Width of the browser window
-        height: Height of the browser window
-        session_id: Unique identifier for this client session
-    """
+async def browser_resize(
+    width: Annotated[int, "Width of the browser window"],
+    height: Annotated[int, "Height of the browser window"],
+    session_id: Annotated[str, "Unique identifier for this client session"] = "default",
+) -> str:
+    """Resize the browser window"""
     session = get_session(session_id)
     page = get_current_page(session)
 
@@ -371,12 +361,10 @@ async def browser_resize(width: int, height: int, session_id: str = "default") -
 
 
 @mcp.tool()
-async def browser_snapshot(session_id: str = "default") -> dict[str, Any]:
-    """Capture accessibility snapshot of the current page
-
-    Args:
-        session_id: Unique identifier for this client session
-    """
+async def browser_snapshot(
+    session_id: Annotated[str, "Unique identifier for this client session"] = "default",
+) -> dict[str, Any]:
+    """Capture accessibility snapshot of the current page. Use this tool in case the you think the web did not fully load previously."""
     session = get_session(session_id)
     page = get_current_page(session)
 
@@ -397,21 +385,20 @@ async def browser_snapshot(session_id: str = "default") -> dict[str, Any]:
 
 @mcp.tool()
 async def browser_take_screenshot(
-    session_id: str = "default",
-    type: str = "png",
-    element: Optional[str] = None,
-    ref: Optional[str] = None,
-    full_page: bool = False,
+    session_id: Annotated[str, "Unique identifier for this client session"] = "default",
+    type: Annotated[str, "Image format (png or jpeg)"] = "png",
+    element: Annotated[Optional[str], "Human-readable element description"] = None,
+    locator: Annotated[
+        Optional[ElementLocator],
+        "Element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)",
+    ] = None,
+    nth: Annotated[
+        Optional[int],
+        "Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)",
+    ] = None,
+    full_page: Annotated[bool, "Take screenshot of full scrollable page"] = False,
 ) -> str:
-    """Take a screenshot of the current page
-
-    Args:
-        session_id: Unique identifier for this client session
-        type: Image format (png or jpeg)
-        element: Human-readable element description
-        ref: Exact target element reference from the page snapshot
-        full_page: Take screenshot of full scrollable page
-    """
+    """Take a screenshot of the current page"""
     session = get_session(session_id)
     page = get_current_page(session)
 
@@ -420,13 +407,10 @@ async def browser_take_screenshot(
 
     screenshot_options = {"type": type}
 
-    if element and ref:
+    if element and locator:
         # Screenshot specific element
-        element_handle = await page.query_selector(ref)
-        if element_handle:
-            screenshot_bytes = await element_handle.screenshot(**screenshot_options)
-        else:
-            raise ValueError(f"Element not found: {ref}")
+        playwright_locator, desc = _get_locator(page, locator, nth)
+        screenshot_bytes = await playwright_locator.screenshot(**screenshot_options)
     else:
         # Screenshot full page or viewport
         screenshot_options["full_page"] = full_page
@@ -437,19 +421,17 @@ async def browser_take_screenshot(
 
 @mcp.tool()
 async def browser_get_html(
-    session_id: str = "default",
-    selector: Optional[str] = None,
-    max_length: int = 50000,
-    filter_tags: Optional[list[str]] = None,
+    session_id: Annotated[str, "Unique identifier for this client session"] = "default",
+    selector: Annotated[
+        Optional[str], "CSS selector to get HTML from (defaults to body)"
+    ] = None,
+    max_length: Annotated[int, "Maximum characters to return"] = 50000,
+    filter_tags: Annotated[
+        Optional[list[str]],
+        "List of tag names to remove (e.g., ['script', 'style']). Defaults to ['script']",
+    ] = None,
 ) -> str:
-    """Get HTML content for debugging when locators fail
-
-    Args:
-        session_id: Unique identifier for this client session
-        selector: CSS selector to get HTML from (defaults to body)
-        max_length: Maximum characters to return (default 50000)
-        filter_tags: List of tag names to remove (e.g., ['script', 'style']). Defaults to ['script']
-    """
+    """Get HTML content for debugging when locators fail"""
     session = get_session(session_id)
     page = get_current_page(session)
 
@@ -543,25 +525,24 @@ async def session_create() -> str:
 
 @mcp.tool()
 async def browser_click(
-    element: str,
-    locator: ElementLocator,
-    nth: Optional[int] = None,
-    session_id: str = "default",
-    double_click: bool = False,
-    button: str = "left",
-    modifiers: Optional[List[str]] = None,
+    element: Annotated[str, "Human-readable element description"],
+    locator: Annotated[
+        ElementLocator,
+        "Element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)",
+    ],
+    nth: Annotated[
+        Optional[int],
+        "Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)",
+    ] = None,
+    session_id: Annotated[str, "Unique identifier for this client session"] = "default",
+    double_click: Annotated[bool, "Whether to perform a double click"] = False,
+    button: Annotated[str, "Button to click (left, right, middle)"] = "left",
+    modifiers: Annotated[
+        Optional[List[str]],
+        "Modifier keys to press (Alt, Control, Meta, Shift)",
+    ] = None,
 ) -> Dict[str, Any]:
-    """Perform click on a web page
-
-    Args:
-        element: Human-readable element description
-        locator: Element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)
-        nth: Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
-        session_id: Unique identifier for this client session
-        double_click: Whether to perform a double click
-        button: Button to click (left, right, middle)
-        modifiers: Modifier keys to press (Alt, Control, Meta, Shift)
-    """
+    """Perform click on a web page"""
     session = get_session(session_id)
     page = get_current_page(session)
 
@@ -589,19 +570,18 @@ async def browser_click(
 
 @mcp.tool()
 async def browser_hover(
-    element: str,
-    locator: ElementLocator,
-    nth: Optional[int] = None,
-    session_id: str = "default",
+    element: Annotated[str, "Human-readable element description"],
+    locator: Annotated[
+        ElementLocator,
+        "Element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)",
+    ],
+    nth: Annotated[
+        Optional[int],
+        "Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)",
+    ] = None,
+    session_id: Annotated[str, "Unique identifier for this client session"] = "default",
 ) -> Dict[str, Any]:
-    """Hover over element on page
-
-    Args:
-        element: Human-readable element description
-        locator: Element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)
-        nth: Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
-        session_id: Unique identifier for this client session
-    """
+    """Hover over element on page"""
     session = get_session(session_id)
     page = get_current_page(session)
 
@@ -620,25 +600,21 @@ async def browser_hover(
 
 @mcp.tool()
 async def browser_type(
-    element: str,
-    text: str,
-    locator: ElementLocator,
-    nth: Optional[int] = None,
-    session_id: str = "default",
-    submit: bool = False,
-    slowly: bool = False,
+    element: Annotated[str, "Human-readable element description"],
+    text: Annotated[str, "Text to type into the element"],
+    locator: Annotated[
+        ElementLocator,
+        "Element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)",
+    ],
+    nth: Annotated[
+        Optional[int],
+        "Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)",
+    ] = None,
+    session_id: Annotated[str, "Unique identifier for this client session"] = "default",
+    submit: Annotated[bool, "Whether to submit (press Enter after)"] = False,
+    slowly: Annotated[bool, "Whether to type one character at a time"] = False,
 ) -> Dict[str, Any]:
-    """Type text into editable element
-
-    Args:
-        element: Human-readable element description
-        text: Text to type into the element
-        locator: Element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)
-        nth: Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
-        session_id: Unique identifier for this client session
-        submit: Whether to submit (press Enter after)
-        slowly: Whether to type one character at a time
-    """
+    """Type text into editable element"""
     session = get_session(session_id)
     page = get_current_page(session)
 
@@ -665,13 +641,11 @@ async def browser_type(
 
 
 @mcp.tool()
-async def browser_press_key(key: str, session_id: str = "default") -> Dict[str, Any]:
-    """Press a key on the keyboard
-
-    Args:
-        key: Name of the key to press (e.g., ArrowLeft, a, Enter)
-        session_id: Unique identifier for this client session
-    """
+async def browser_press_key(
+    key: Annotated[str, "Name of the key to press (e.g., ArrowLeft, a, Enter)"],
+    session_id: Annotated[str, "Unique identifier for this client session"] = "default",
+) -> Dict[str, Any]:
+    """Press a key on the keyboard"""
     session = get_session(session_id)
     page = get_current_page(session)
 
@@ -687,14 +661,13 @@ async def browser_press_key(key: str, session_id: str = "default") -> Dict[str, 
 
 @mcp.tool()
 async def browser_fill_form(
-    fields: List[FormField], session_id: str = "default"
+    fields: Annotated[
+        List[FormField],
+        "List of FormField objects, each with element description, value, locator, and optional nth index",
+    ],
+    session_id: Annotated[str, "Unique identifier for this client session"] = "default",
 ) -> Dict[str, Any]:
-    """Fill multiple form fields
-
-    Args:
-        fields: List of FormField objects, each with element description, value, locator, and optional nth index
-        session_id: Unique identifier for this client session
-    """
+    """Fill multiple form fields"""
     session = get_session(session_id)
     page = get_current_page(session)
 
@@ -721,21 +694,19 @@ async def browser_fill_form(
 
 @mcp.tool()
 async def browser_select_option(
-    element: str,
-    values: List[str],
-    locator: ElementLocator,
-    nth: Optional[int] = None,
-    session_id: str = "default",
+    element: Annotated[str, "Human-readable element description"],
+    values: Annotated[List[str], "Array of values to select"],
+    locator: Annotated[
+        ElementLocator,
+        "Element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)",
+    ],
+    nth: Annotated[
+        Optional[int],
+        "Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)",
+    ] = None,
+    session_id: Annotated[str, "Unique identifier for this client session"] = "default",
 ) -> Dict[str, Any]:
-    """Select an option in a dropdown
-
-    Args:
-        element: Human-readable element description
-        values: Array of values to select
-        locator: Element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)
-        nth: Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
-        session_id: Unique identifier for this client session
-    """
+    """Select an option in a dropdown"""
     session = get_session(session_id)
     page = get_current_page(session)
 
@@ -754,14 +725,13 @@ async def browser_select_option(
 
 @mcp.tool()
 async def browser_file_upload(
-    paths: Optional[List[str]] = None, session_id: str = "default"
+    paths: Annotated[
+        Optional[List[str]],
+        "Absolute paths to files to upload. If omitted, file chooser is cancelled.",
+    ] = None,
+    session_id: Annotated[str, "Unique identifier for this client session"] = "default",
 ) -> str:
-    """Upload one or multiple files
-
-    Args:
-        paths: Absolute paths to files to upload. If omitted, file chooser is cancelled.
-        session_id: Unique identifier for this client session
-    """
+    """Upload one or multiple files"""
     session = get_session(session_id)
     page = get_current_page(session)
 
@@ -785,25 +755,25 @@ async def browser_file_upload(
 
 @mcp.tool()
 async def browser_drag(
-    start_element: str,
-    end_element: str,
-    start_locator: ElementLocator,
-    end_locator: ElementLocator,
-    start_nth: Optional[int] = None,
-    end_nth: Optional[int] = None,
-    session_id: str = "default",
+    start_element: Annotated[str, "Human-readable source element description"],
+    end_element: Annotated[str, "Human-readable target element description"],
+    start_locator: Annotated[
+        ElementLocator,
+        "Source element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)",
+    ],
+    end_locator: Annotated[
+        ElementLocator,
+        "Target element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)",
+    ],
+    start_nth: Annotated[
+        Optional[int], "Zero-based index for source element when multiple match"
+    ] = None,
+    end_nth: Annotated[
+        Optional[int], "Zero-based index for target element when multiple match"
+    ] = None,
+    session_id: Annotated[str, "Unique identifier for this client session"] = "default",
 ) -> Dict[str, Any]:
-    """Perform drag and drop between two elements
-
-    Args:
-        start_element: Human-readable source element description
-        end_element: Human-readable target element description
-        start_locator: Source element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)
-        end_locator: Target element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)
-        start_nth: Zero-based index for source element when multiple match
-        end_nth: Zero-based index for target element when multiple match
-        session_id: Unique identifier for this client session
-    """
+    """Perform drag and drop between two elements"""
     session = get_session(session_id)
     page = get_current_page(session)
 
@@ -827,137 +797,132 @@ async def browser_drag(
         }
 
 
-@mcp.tool()
-async def browser_evaluate(
-    function: str,
-    session_id: str = "default",
-    element: Optional[str] = None,
-    ref: Optional[str] = None,
-) -> str:
-    """Evaluate JavaScript expression on page or element
+# @mcp.tool()
+# async def browser_evaluate(
+#     function: Annotated[
+#         str, "JavaScript function as string (e.g., '() => document.title')"
+#     ],
+#     session_id: Annotated[str, "Unique identifier for this client session"] = "default",
+#     element: Annotated[Optional[str], "Human-readable element description"] = None,
+#     ref: Annotated[Optional[str], "Exact target element reference"] = None,
+# ) -> str:
+#     """Evaluate JavaScript expression on page or element"""
+#     session = get_session(session_id)
+#     page = get_current_page(session)
 
-    Args:
-        function: JavaScript function as string (e.g., "() => document.title")
-        session_id: Unique identifier for this client session
-        element: Human-readable element description
-        ref: Exact target element reference
-    """
-    session = get_session(session_id)
-    page = get_current_page(session)
+#     if not page:
+#         return "No browser page available"
 
-    if not page:
-        return "No browser page available"
+#     if element and ref:
+#         element_handle = await page.query_selector(ref)
+#         if element_handle:
+#             result = await element_handle.evaluate(function)
+#         else:
+#             return f"Element not found: {ref}"
+#     else:
+#         result = await page.evaluate(function)
 
-    if element and ref:
-        element_handle = await page.query_selector(ref)
-        if element_handle:
-            result = await element_handle.evaluate(function)
-        else:
-            return f"Element not found: {ref}"
-    else:
-        result = await page.evaluate(function)
-
-    return json.dumps(result, indent=2)
+#     return json.dumps(result, indent=2)
 
 
-@mcp.tool()
-async def browser_wait_for(
-    session_id: str = "default",
-    time: Optional[float] = None,
-    text: Optional[str] = None,
-    text_gone: Optional[str] = None,
-) -> str:
-    """Wait for text to appear/disappear or a specified time to pass
+# @mcp.tool()
+# async def browser_wait_for(
+#     session_id: str = "default",
+#     time: Optional[float] = None,
+#     text: Optional[str] = None,
+#     text_gone: Optional[str] = None,
+# ) -> str:
+#     """Wait for text to appear/disappear or a specified time to pass
 
-    Args:
-        session_id: Unique identifier for this client session
-        time: Time to wait in seconds
-        text: Text to wait for to appear
-        text_gone: Text to wait for to disappear
-    """
-    session = get_session(session_id)
-    page = get_current_page(session)
+#     Args:
+#         session_id: Unique identifier for this client session
+#         time: Time to wait in seconds
+#         text: Text to wait for to appear
+#         text_gone: Text to wait for to disappear
+#     """
+#     session = get_session(session_id)
+#     page = get_current_page(session)
 
-    if not page:
-        return "No browser page available"
+#     if not page:
+#         return "No browser page available"
 
-    if time is not None:
-        await page.wait_for_timeout(int(time * 1000))
-        return f"Waited for {time} seconds"
-    elif text:
-        await page.wait_for_selector(f"text={text}")
-        return f"Waited for text '{text}' to appear"
-    elif text_gone:
-        await page.wait_for_selector(f"text={text_gone}", state="hidden")
-        return f"Waited for text '{text_gone}' to disappear"
-    else:
-        return "No wait condition specified"
+#     if time is not None:
+#         await page.wait_for_timeout(int(time * 1000))
+#         return f"Waited for {time} seconds"
+#     elif text:
+#         await page.wait_for_selector(f"text={text}")
+#         return f"Waited for text '{text}' to appear"
+#     elif text_gone:
+#         await page.wait_for_selector(f"text={text_gone}", state="hidden")
+#         return f"Waited for text '{text_gone}' to disappear"
+#     else:
+#         return "No wait condition specified"
 
 
 # Dialog and Monitoring Tools
 
 
-@mcp.tool()
-async def browser_handle_dialog(
-    accept: bool, session_id: str = "default", prompt_text: Optional[str] = None
-) -> str:
-    """Handle a dialog
+# @mcp.tool()
+# async def browser_handle_dialog(
+#     accept: bool, session_id: str = "default", prompt_text: Optional[str] = None
+# ) -> str:
+#     """Handle a dialog
 
-    Args:
-        accept: Whether to accept the dialog
-        session_id: Unique identifier for this client session
-        prompt_text: Text to enter in prompt dialog
-    """
-    session = get_session(session_id)
-    page = get_current_page(session)
+#     Args:
+#         accept: Whether to accept the dialog
+#         session_id: Unique identifier for this client session
+#         prompt_text: Text to enter in prompt dialog
+#     """
+#     session = get_session(session_id)
+#     page = get_current_page(session)
 
-    if not page:
-        return "No browser page available"
+#     if not page:
+#         return "No browser page available"
 
-    # Set up dialog handler for the next dialog
-    async def handle_dialog(dialog):
-        if accept:
-            if prompt_text:
-                await dialog.accept(prompt_text)
-            else:
-                await dialog.accept()
-        else:
-            await dialog.dismiss()
+#     # Set up dialog handler for the next dialog
+#     async def handle_dialog(dialog):
+#         if accept:
+#             if prompt_text:
+#                 await dialog.accept(prompt_text)
+#             else:
+#                 await dialog.accept()
+#         else:
+#             await dialog.dismiss()
 
-    page.once("dialog", handle_dialog)
+#     page.once("dialog", handle_dialog)
 
-    action = "accept" if accept else "dismiss"
-    return f"Dialog handler set to {action}"
-
-
-@mcp.tool()
-async def browser_console_messages(
-    session_id: str = "default", only_errors: bool = False
-) -> str:
-    """Returns all console messages
-
-    Args:
-        session_id: Unique identifier for this client session
-        only_errors: Only return error messages
-    """
-    session = get_session(session_id)
-
-    if only_errors:
-        errors = [msg for msg in session.console_messages if msg["type"] == "error"]
-        return json.dumps(errors, indent=2)
-
-    return json.dumps(session.console_messages, indent=2)
+#     action = "accept" if accept else "dismiss"
+#     return f"Dialog handler set to {action}"
 
 
-@mcp.tool()
-async def browser_network_requests(session_id: str = "default") -> str:
-    """Returns all network requests since loading the page
+# @mcp.tool()
+# async def browser_console_messages(
+#     session_id: str = "default", only_errors: bool = False
+# ) -> str:
+#     """Returns all console messages
 
-    Args:
-        session_id: Unique identifier for this client session
-    """
-    session = get_session(session_id)
-    return json.dumps(session.network_requests, indent=2)
+#     Args:
+#         session_id: Unique identifier for this client session
+#         only_errors: Only return error messages
+#     """
+#     session = get_session(session_id)
+
+#     if only_errors:
+#         errors = [msg for msg in session.console_messages if msg["type"] == "error"]
+#         return json.dumps(errors, indent=2)
+
+#     return json.dumps(session.console_messages, indent=2)
+
+
+# @mcp.tool()
+# async def browser_network_requests(session_id: str = "default") -> str:
+#     """Returns all network requests since loading the page
+
+#     Args:
+#         session_id: Unique identifier for this client session
+#     """
+#     session = get_session(session_id)
+#     return json.dumps(session.network_requests, indent=2)
 
 
 # Tab Management Tools
@@ -965,17 +930,14 @@ async def browser_network_requests(session_id: str = "default") -> str:
 
 @mcp.tool()
 async def browser_tabs(
-    action: Literal["list", "create", "close", "select"],
+    action: Annotated[
+        Literal["list", "create", "close", "select"],
+        "Operation to perform (list, create, close, select)",
+    ],
+    index: Annotated[Optional[int], "Tab index for close/select operations"] = None,
     session_id: str = "default",
-    index: Optional[int] = None,
 ) -> str:
-    """List, create, close, or select a browser tab
-
-    Args:
-        action: Operation to perform (list, create, close, select)
-        session_id: Unique identifier for this client session
-        index: Tab index for close/select operations
-    """
+    """List, create, close, or select a browser tab"""
     session = get_session(session_id)
 
     if action == "list":
