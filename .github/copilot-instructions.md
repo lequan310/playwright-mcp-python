@@ -1,59 +1,59 @@
-<!-- GitHub Copilot instructions for contributors and automated coding agents -->
-# Playwright MCP — Agent instructions
+## Playwright MCP Server — AI Coding Assistant Notes
 
-These notes give focused, actionable guidance for AI coding agents working on this repository.
-Keep edits small, preserve style, and reference the concrete files listed below.
+Quick, targeted guidance to help an AI agent be productive in this repository.
 
-Key files to read first
-- `README.md` — high-level project goals, install/run commands, and tool descriptions (dev: `fastmcp dev src/server.py`; prod: `python src/session_server.py`).
-- `src/server.py` — single-client MCP server implementation; shows role-based locator patterns, snapshot flow, and global browser lifecycle.
-- `src/session_server.py` — multi-client/session variant; session lifecycle, cleanup task, and per-session state are implemented here.
-- `pyproject.toml` — Python requirements (requires Python >= 3.13, dependencies: fastmcp, playwright).
+### Big picture
+- This project implements a Model Context Protocol (MCP) server that exposes Playwright-driven browser automation as LLM-callable tools.
+- Two entrypoints:
+  - `src/server.py` — single-client, inspector-friendly development server (used with `fastmcp dev`).
+  - `src/session_server.py` — multi-client sessioned server; uses `session_id` to isolate browser state.
+- Accessibility-first approach: every action returns an accessibility snapshot (`page.locator("body").aria_snapshot()`) rather than relying on visual selectors.
 
-Big-picture architecture (short)
-- The project exposes an MCP server (FastMCP) that wraps Playwright browser automation as tools. Tools are declared with `@mcp.tool()` (see `server.py` and `session_server.py`).
-- Two entry modes:
-  - `server.py`: single shared browser state (global variables). Simpler, useful for quick testing and inspector (`fastmcp dev`).
-  - `session_server.py`: per-client isolated sessions stored in `sessions` dict with `BrowserSession` dataclass. Use this for concurrent clients and real deployments.
-- Tool outputs prefer structured accessibility snapshots via Playwright's `aria_snapshot()` for action verification rather than raw screenshots.
+### Key files to read first
+- `README.md` — install & run notes, tool summaries.
+- `pyproject.toml` — dependencies (fastmcp, patchright, playwright). Python >= 3.13 required.
+- `src/server.py` — example of core tools for single-client usage.
+- `src/session_server.py` — session lifecycle, cleanup, and how tools accept `session_id`.
+- `src/schemas/element.py` — Pydantic models for locators and form fields (AriaLabel, Selector, FormField).
 
-Project-specific patterns and conventions
-- Prefer role-based locators when interacting with elements: code uses `page.get_by_role(role, name=name)` before falling back to CSS `selector` (see `browser_click`, `browser_type`, `browser_select_option`). Mimic these in new tools.
-- All tools return structured dictionaries with either `error` keys or `{message, url, title, snapshot}` shapes. Follow this response contract in new tools.
-- Global vs session APIs: `server.py` functions do not accept session IDs and operate on module-level browser state; `session_server.py` functions take a `session_id: str` argument. Keep implementations consistent with the chosen entrypoint.
-- When capturing DOM state, prefer `page.locator("body").aria_snapshot()`; use `browser_get_html` for debug HTML with `filter_tags` (defaults to `['script']`).
+### How to run (developer flow)
+- Create venv and install deps (project uses `uv` in README):
+  - `uv venv --python 3.13`
+  - `uv sync`
+  - `playwright install chromium`
+- Dev with inspector (fast feedback):
+  - `fastmcp dev src/server.py`
+- Production / multi-client mode:
+  - `python src/session_server.py`
+- Tests: run `pytest -v` (tests live in `tests/`, `pytest.ini` configures markers and coverage).
 
-Developer workflows and commands (concrete)
-- Create venv with uv (`uv venv --python 3.13`) and install dependencies (`uv sync`) as documented in `README.md`.
-- Install Playwright browser binaries: `playwright install chromium`.
-- Run in development with inspector: `fastmcp dev src/server.py` (opens inspector and allows interactive testing).
-- Run session server (production-like): `python src/session_server.py`.
-- Tests: `pytest` (see `pytest.ini`). Tests expect `pytest-asyncio` and cover async tools; run `uv sync` first to install dev deps.
+### Project-specific patterns & conventions
+- Tools are FastMCP tools decorated with `@mcp.tool()` and exposed to the MCP runtime. Follow existing return shapes (JSON-serializable dicts or `Image` from `fastmcp.utilities.types`).
+- Locator strategy: prefer `AriaLabel` (role + name) where possible. `ElementLocator = Union[AriaLabel, Selector]` in `src/schemas/element.py`.
+  - Example: `page.get_by_role(locator.role, name=locator.name)` used across code.
+- Snapshot-first: after most interactions the code calls `_get_snapshot_result(page, message)` which waits for load state, grabs `aria_snapshot`, and returns `{message, url, title, snapshot}`. New tools should reuse this helper when appropriate.
+- Session semantics: `src/session_server.py` stores sessions in `sessions: Dict[str, BrowserSession]`. Tools in the session server accept a `session_id: str = "default"` parameter. Clean-up runs in the background (`session_cleanup_task`).
+- Browser initialization: both servers call `async_playwright().start()` and create contexts with consistent `user_agent`, `locale`, and `viewport`. They also call `page.add_init_script` to hide `navigator.webdriver` and spoof plugins/languages — preserve this when adding features that rely on UA/feature flags.
 
-Integration points and external dependencies
-- Playwright: the code uses `playwright.async_api` extensively; prefer async implementations and use `async_playwright().start()` and `playwright_instance.stop()` lifecycle calls as shown.
-- fastmcp: `FastMCP` registers tools via `@mcp.tool()` decorators. Tool signatures are how the MCP server exposes functions to LLMs — changing signatures affects the external API.
+### Adding or changing a tool (concrete steps)
+1. Add function in `src/server.py` (single-client) or `src/session_server.py` (sessioned). Decorate with `@mcp.tool()`.
+2. Keep signatures JSON-serializable. If returning an image, return `Image(data=bytes, format='png')`.
+3. Use `_get_locator(page, locator, nth)` to convert `ElementLocator` to a Playwright locator and build consistent debug descriptions.
+4. After performing the action, return `_get_snapshot_result(page, "Your message")` where appropriate.
+5. Update `README.md` tools summary if you add a top-level, user-facing tool.
 
-Edge cases and error handling to follow
-- Always check `get_current_page()` or session page presence and return `{"error": "No browser page available"}` when absent (this pattern is used repeatedly).
-- Resource cleanup: closing contexts and stopping `playwright_instance` is required to avoid orphaned browser processes (see `browser_close` and `cleanup_session`).
-- Session limits: `session_server.py` enforces `MAX_SESSIONS` and background session cleanup (`session_cleanup_task`) — avoid creating unbounded sessions in tests.
+### Testing and linting notes
+- Tests are discovered under `tests/` according to `pytest.ini`. Use `pytest -k <name> -v` to run subsets.
+- Linting uses ruff (configured in `ruff.toml`). The project lists `ruff` in `dev` dependencies.
 
-Examples to copy/paste when adding tools
-- Role-first click pattern (from `server.py:browser_click`):
-  - If `role` and `name` provided: `locator = page.get_by_role(role, name=name)` then `await locator.click()`.
-  - Else if `selector` provided: `await page.click(selector)`.
-- Snapshot-return contract (from `_get_snapshot_result`):
-  - Return `{"message": <str>, "url": page.url, "title": await page.title(), "snapshot": snapshot}` on success.
+### Integration & external dependencies
+- Playwright is required and must have browser binaries installed via `playwright install`.
+- The server depends on `fastmcp` (runtime for exposing tools to LLMs) and `patchright` wrapper for playwright async APIs.
 
-What not to change
-- Do not change the public tool names or their parameter names (the MCP surface). If you must change them, update `README.md` and note breaking changes.
+### Examples (call-signature reminders)
+- Click (sessioned):
+  - `browser_click(element: str, locator: ElementLocator, nth: Optional[int]=None, session_id: str='default', ...)`
+- Snapshot helper returns:
+  - `{ "message": str, "url": str, "title": str, "snapshot": <accessibility snapshot dict> }`
 
-Where to add tests
-- `tests/` — add async tests using `pytest-asyncio`. Mirror the tool contracts: call tool functions and assert snapshot structure or `error` keys.
-
-If parts are unclear
-- Ask for clarification and point to the specific file/line (e.g., "In `src/session_server.py`, lines ~1-120 define BrowserSession: should new tools accept session_id?").
-
-Feedback request
-- Review these instructions and tell me any missing file references or workflow steps to include. I can iterate quickly.
+If anything here is unclear or you'd like more examples (tool wiring, test examples, or a checklist for PRs), tell me what to expand and I'll iterate.

@@ -72,85 +72,61 @@ python src/server.py
   - Title: Click
   - Description: Perform click on a web page
   - Parameters:
-    - `element` (string): Human-readable element description used to obtain permission to interact with the element
-    - `role` (string, optional): ARIA role of the element (e.g., 'button', 'link', 'textbox')
-    - `name` (string, optional): Accessible name of the element (from snapshot)
-    - `selector` (string, optional): CSS selector (fallback if role/name not available)
+    - `element` (string): Human-readable element description
+    - `locator` (ElementLocator): Element locator - either AriaLabel with `role` and `name` fields, or Selector with `selector` field
     - `nth` (number, optional): Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
     - `doubleClick` (boolean, optional): Whether to perform a double click instead of a single click
-    - `button` (string, optional): Button to click, defaults to left
-    - `modifiers` (array, optional): Modifier keys to press
+    - `button` (string, optional): Button to click (left, right, middle), defaults to left
+    - `modifiers` (array, optional): Modifier keys to press (Alt, Control, Meta, Shift)
   - Read-only: **false**
-
 
 - **browser_close**
   - Title: Close browser
-  - Description: Close the page
+  - Description: Close the browser and clean up all resources
   - Parameters: None
   - Read-only: **false**
-
-- **browser_console_messages**
-  - Title: Get console messages
-  - Description: Returns all console messages
-  - Parameters:
-    - `onlyErrors` (boolean, optional): Only return error messages
-  - Read-only: **true**
 
 - **browser_drag**
   - Title: Drag mouse
   - Description: Perform drag and drop between two elements
   - Parameters:
-    - `startElement` (string): Human-readable source element description used to obtain the permission to interact with the element
-    - `startRole` (string, optional): ARIA role of source element
-    - `startName` (string, optional): Accessible name of source element
-    - `startSelector` (string, optional): CSS selector for source (fallback)
+    - `startElement` (string): Human-readable source element description
+    - `startLocator` (ElementLocator): Source element locator - either AriaLabel with `role` and `name` fields, or Selector with `selector` field
     - `startNth` (number, optional): Zero-based index for source element when multiple match
-    - `endElement` (string): Human-readable target element description used to obtain the permission to interact with the element
-    - `endRole` (string, optional): ARIA role of target element
-    - `endName` (string, optional): Accessible name of target element
-    - `endSelector` (string, optional): CSS selector for target (fallback)
+    - `endElement` (string): Human-readable target element description
+    - `endLocator` (ElementLocator): Target element locator - either AriaLabel with `role` and `name` fields, or Selector with `selector` field
     - `endNth` (number, optional): Zero-based index for target element when multiple match
-  - Read-only: **false**
-
-- **browser_evaluate**
-  - Title: Evaluate JavaScript
-  - Description: Evaluate JavaScript expression on page or element
-  - Parameters:
-    - `function` (string): () => { /* code */ } or (element) => { /* code */ } when element is provided
-    - `element` (string, optional): Human-readable element description used to obtain permission to interact with the element
-    - `selector` (string, optional): CSS selector for target element (if evaluating on specific element)
   - Read-only: **false**
 
 - **browser_file_upload**
   - Title: Upload files
   - Description: Upload one or multiple files
   - Parameters:
-    - `paths` (array, optional): The absolute paths to the files to upload. Can be single file or multiple files. If omitted, file chooser is cancelled.
+    - `paths` (array, optional): Absolute paths to files to upload. If omitted, file chooser is cancelled.
   - Read-only: **false**
 
 - **browser_fill_form**
   - Title: Fill form
   - Description: Fill multiple form fields
   - Parameters:
-    - `fields` (array): Fields to fill in
+    - `fields` (array): List of FormField objects, each with `element` (string), `value` (string), `locator` (ElementLocator), and optional `nth` (number)
   - Read-only: **false**
 
-- **browser_handle_dialog**
-  - Title: Handle a dialog
-  - Description: Handle a dialog
+- **browser_get_html**
+  - Title: Get HTML content
+  - Description: Get HTML content for debugging when locators fail
   - Parameters:
-    - `accept` (boolean): Whether to accept the dialog.
-    - `promptText` (string, optional): The text of the prompt in case of a prompt dialog.
-  - Read-only: **false**
+    - `selector` (string, optional): CSS selector to get HTML from (defaults to body)
+    - `maxLength` (number, optional): Maximum characters to return (default 50000)
+    - `filter_tags` (array, optional): List of tag names to remove (e.g., ['script', 'style']). Defaults to ['script']
+  - Read-only: **true**
 
 - **browser_hover**
   - Title: Hover mouse
   - Description: Hover over element on page
   - Parameters:
-    - `element` (string): Human-readable element description used to obtain permission to interact with the element
-    - `role` (string, optional): ARIA role of the element (e.g., 'button', 'link', 'textbox')
-    - `name` (string, optional): Accessible name of the element (from snapshot)
-    - `selector` (string, optional): CSS selector (fallback if role/name not available)
+    - `element` (string): Human-readable element description
+    - `locator` (ElementLocator): Element locator - either AriaLabel with `role` and `name` fields, or Selector with `selector` field
     - `nth` (number, optional): Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
   - Read-only: **false**
 
@@ -167,18 +143,13 @@ python src/server.py
   - Parameters: None
   - Read-only: **false**
 
-- **browser_search**
-  - Title: Search on Google
-  - Description: Search for a topic using Google search
+- **browser_open**
+  - Title: Open browser
+  - Description: Open a new browser instance
   - Parameters:
-    - `query` (string): The search query or topic to search for
+    - `width` (number, optional): Initial browser width (default 1920)
+    - `height` (number, optional): Initial browser height (default 1080)
   - Read-only: **false**
-
-- **browser_network_requests**
-  - Title: List network requests
-  - Description: Returns all network requests since loading the page
-  - Parameters: None
-  - Read-only: **true**
 
 - **browser_press_key**
   - Title: Press a key
@@ -195,55 +166,49 @@ python src/server.py
     - `height` (number): Height of the browser window
   - Read-only: **false**
 
+- **browser_search**
+  - Title: Search on Google
+  - Description: Search for a topic using Google search
+  - Parameters:
+    - `query` (string): The search query or topic to search for
+  - Read-only: **false**
+
 - **browser_select_option**
   - Title: Select option
   - Description: Select an option in a dropdown
   - Parameters:
-    - `element` (string): Human-readable element description used to obtain permission to interact with the element
-    - `values` (array): Array of values to select in the dropdown. This can be a single value or multiple values.
-    - `role` (string, optional): ARIA role of the element (typically 'combobox' or 'listbox')
-    - `name` (string, optional): Accessible name of the element (from snapshot)
-    - `selector` (string, optional): CSS selector (fallback if role/name not available)
+    - `element` (string): Human-readable element description
+    - `values` (array): Array of values to select in the dropdown
+    - `locator` (ElementLocator): Element locator - either AriaLabel with `role` and `name` fields, or Selector with `selector` field
     - `nth` (number, optional): Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
   - Read-only: **false**
 
 - **browser_snapshot**
   - Title: Page snapshot
-  - Description: Capture accessibility snapshot of the current page, this is better than screenshot
+  - Description: Capture accessibility snapshot of the current page
   - Parameters: None
   - Read-only: **true**
 
 - **browser_take_screenshot**
   - Title: Take a screenshot
-  - Description: Take a screenshot of the current page. You can't perform actions based on the screenshot, use browser_snapshot for actions.
+  - Description: Take a screenshot of the current page
   - Parameters:
-    - `type` (string, optional): Image format for the screenshot. Default is png.
-    - `element` (string, optional): Human-readable element description used to obtain permission to screenshot the element. If not provided, the screenshot will be taken of viewport. If element is provided, ref must be provided too.
-    - `ref` (string, optional): Exact target element reference (CSS selector) from the page snapshot. If not provided, the screenshot will be taken of viewport. If ref is provided, element must be provided too.
-    - `fullPage` (boolean, optional): When true, takes a screenshot of the full scrollable page, instead of the currently visible viewport. Cannot be used with element screenshots.
+    - `type` (string, optional): Image format (png or jpeg). Default is png.
+    - `element` (string, optional): Human-readable element description
+    - `ref` (string, optional): Exact target element reference (CSS selector) from the page snapshot
+    - `fullPage` (boolean, optional): Take screenshot of full scrollable page
   - Read-only: **true**
 
 - **browser_type**
   - Title: Type text
   - Description: Type text into editable element
   - Parameters:
-    - `element` (string): Human-readable element description used to obtain permission to interact with the element
+    - `element` (string): Human-readable element description
     - `text` (string): Text to type into the element
-    - `role` (string, optional): ARIA role of the element (e.g., 'textbox', 'searchbox', 'combobox')
-    - `name` (string, optional): Accessible name of the element (from snapshot)
-    - `selector` (string, optional): CSS selector (fallback if role/name not available)
+    - `locator` (ElementLocator): Element locator - either AriaLabel with `role` and `name` fields, or Selector with `selector` field
     - `nth` (number, optional): Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
-    - `submit` (boolean, optional): Whether to submit entered text (press Enter after)
-    - `slowly` (boolean, optional): Whether to type one character at a time. Useful for triggering key handlers in the page. By default entire text is filled in at once.
-  - Read-only: **false**
-
-- **browser_wait_for**
-  - Title: Wait for
-  - Description: Wait for text to appear or disappear or a specified time to pass
-  - Parameters:
-    - `time` (number, optional): The time to wait in seconds
-    - `text` (string, optional): The text to wait for
-    - `textGone` (string, optional): The text to wait for to disappear
+    - `submit` (boolean, optional): Whether to submit (press Enter after)
+    - `slowly` (boolean, optional): Whether to type one character at a time
   - Read-only: **false**
 
 </details>
@@ -253,10 +218,10 @@ python src/server.py
 
 - **browser_tabs**
   - Title: Manage tabs
-  - Description: List, create, close, or select a browser tab.
+  - Description: List, create, close, or select a browser tab
   - Parameters:
-    - `action` (string): Operation to perform
-    - `index` (number, optional): Tab index, used for close/select. If omitted for close, current tab is closed.
+    - `action` (string): Operation to perform (list, create, close, select)
+    - `index` (number, optional): Tab index for close/select operations. If omitted for close, current tab is closed.
   - Read-only: **false**
 
 </details>

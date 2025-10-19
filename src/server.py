@@ -4,7 +4,15 @@ from urllib.parse import quote_plus
 
 from fastmcp import FastMCP
 from fastmcp.utilities.types import Image
-from playwright.async_api import Browser, BrowserContext, Page, async_playwright
+from patchright.async_api import (
+    Browser,
+    BrowserContext,
+    Page,
+    Playwright,
+    async_playwright,
+)
+
+from schemas.element import AriaLabel, ElementLocator, FormField, Selector
 
 mcp = FastMCP("Playwright MCP Server")
 
@@ -14,7 +22,7 @@ browser: Optional[Browser] = None
 context: Optional[BrowserContext] = None
 pages: list[Page] = []
 current_page_index: int = 0
-playwright_instance = None
+playwright_instance: Optional[Playwright] = None
 console_messages: list[dict[str, Any]] = []
 network_requests: list[dict[str, Any]] = []
 
@@ -52,7 +60,12 @@ async def _initialize_browser(
     playwright_instance = await async_playwright().start()
     browser = await playwright_instance.chromium.launch(
         headless=headless,
-        args=["--disable-blink-features=AutomationControlled", "--disable-info-bars"],
+        args=[
+            "--disable-blink-features=AutomationControlled",
+            "--disable-info-bars",
+            "--start-maximized",
+        ],
+        channel="chrome",
     )
 
     # Handle browser close event
@@ -69,11 +82,12 @@ async def _initialize_browser(
     browser.on("disconnected", handle_browser_close)
 
     context = await browser.new_context(
-        viewport={"width": width, "height": height},
-        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
-        locale="en-US",
-        timezone_id="America/New_York",
-        extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
+        no_viewport=True,
+        # viewport={"width": width, "height": height},
+        # user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.7339.16 Chromium/140.0.7339.16 Safari/537.36",
+        # locale="en-US",
+        # timezone_id="America/New_York",
+        # extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
     )
     page = await context.new_page()
     pages = [page]
@@ -84,20 +98,20 @@ async def _initialize_browser(
     # Set up listeners
     _setup_page_listeners(page)
 
-    # Hide webdriver flag
-    await page.add_init_script(
-        """
-        Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-    """
-    )
+    # # Hide webdriver flag
+    # await page.add_init_script(
+    #     """
+    #     Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+    # """
+    # )
 
-    # Spoof plugins & languages
-    await page.add_init_script(
-        """
-        Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3]});
-        Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
-    """
-    )
+    # # Spoof plugins & languages
+    # await page.add_init_script(
+    #     """
+    #     Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3]});
+    #     Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+    # """
+    # )
 
     return page
 
@@ -119,6 +133,35 @@ def get_current_page() -> Optional[Page]:
     return None
 
 
+def _get_locator(page: Page, locator: ElementLocator, nth: Optional[int] = None):
+    """Create a Playwright locator from ElementLocator union type
+
+    Args:
+        page: The page to create the locator on
+        locator: ElementLocator (AriaLabel or Selector)
+        nth: Optional zero-based index when multiple elements match
+
+    Returns:
+        tuple: (playwright_locator, description_string)
+    """
+    if isinstance(locator, AriaLabel):
+        playwright_locator = page.get_by_role(locator.role, name=locator.name)
+        if nth is not None:
+            playwright_locator = playwright_locator.nth(nth)
+        nth_msg = f", nth={nth}" if nth is not None else ""
+        desc = f"role={locator.role}, name={locator.name}{nth_msg}"
+    elif isinstance(locator, Selector):
+        playwright_locator = page.locator(locator.selector)
+        if nth is not None:
+            playwright_locator = playwright_locator.nth(nth)
+        nth_msg = f", nth={nth}" if nth is not None else ""
+        desc = f"selector={locator.selector}{nth_msg}"
+    else:
+        raise ValueError(f"Invalid locator type: {type(locator)}")
+
+    return playwright_locator, desc
+
+
 async def _get_snapshot_result(
     page: Optional[Page], action_message: str
 ) -> dict[str, Any]:
@@ -135,6 +178,7 @@ async def _get_snapshot_result(
         return {"error": "No browser page available", "message": action_message}
 
     try:
+        await page.wait_for_load_state("load")
         snapshot = await page.locator("body").aria_snapshot()
         page_url = page.url
         page_title = await page.title()
@@ -383,9 +427,7 @@ async def browser_get_html(
 @mcp.tool()
 async def browser_click(
     element: str,
-    role: Optional[str] = None,
-    name: Optional[str] = None,
-    selector: Optional[str] = None,
+    locator: ElementLocator,
     nth: Optional[int] = None,
     doubleClick: bool = False,
     button: str = "left",
@@ -395,9 +437,7 @@ async def browser_click(
 
     Args:
         element: Human-readable element description
-        role: ARIA role of the element (e.g., 'button', 'link', 'textbox')
-        name: Accessible name of the element (from snapshot)
-        selector: CSS selector (fallback if role/name not available)
+        locator: Element locator (AriaLabel with role/name or Selector with CSS/XPath selector)
         nth: Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
         doubleClick: Whether to perform a double click
         button: Button to click (left, right, middle)
@@ -412,29 +452,14 @@ async def browser_click(
         click_options["modifiers"] = modifiers
 
     try:
-        # Prefer role-based locators (more reliable)
-        if role and name:
-            locator = page.get_by_role(role, name=name)
-            if nth is not None:
-                locator = locator.nth(nth)
-            nth_msg = f", nth={nth}" if nth is not None else ""
-            if doubleClick:
-                await locator.dblclick(**click_options)
-                message = (
-                    f"Double-clicked on {element} (role={role}, name={name}{nth_msg})"
-                )
-            else:
-                await locator.click(**click_options)
-                message = f"Clicked on {element} (role={role}, name={name}{nth_msg})"
-        elif selector:
-            if doubleClick:
-                await page.dblclick(selector, **click_options)
-                message = f"Double-clicked on {element} (selector={selector})"
-            else:
-                await page.click(selector, **click_options)
-                message = f"Clicked on {element} (selector={selector})"
+        playwright_locator, desc = _get_locator(page, locator, nth)
+
+        if doubleClick:
+            await playwright_locator.dblclick(**click_options)
+            message = f"Double-clicked on {element} ({desc})"
         else:
-            return {"error": "Must provide either (role + name) or selector"}
+            await playwright_locator.click(**click_options)
+            message = f"Clicked on {element} ({desc})"
 
         return await _get_snapshot_result(page, message)
     except Exception as e:
@@ -444,18 +469,14 @@ async def browser_click(
 @mcp.tool()
 async def browser_hover(
     element: str,
-    role: Optional[str] = None,
-    name: Optional[str] = None,
-    selector: Optional[str] = None,
+    locator: ElementLocator,
     nth: Optional[int] = None,
 ) -> dict[str, Any]:
     """Hover over element on page
 
     Args:
         element: Human-readable element description
-        role: ARIA role of the element (e.g., 'button', 'link', 'textbox')
-        name: Accessible name of the element (from snapshot)
-        selector: CSS selector (fallback if role/name not available)
+        locator: Element locator (AriaLabel with role/name or Selector with CSS/XPath selector)
         nth: Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
     """
     page = get_current_page()
@@ -463,19 +484,9 @@ async def browser_hover(
         return {"error": "No browser page available"}
 
     try:
-        # Prefer role-based locators
-        if role and name:
-            locator = page.get_by_role(role, name=name)
-            if nth is not None:
-                locator = locator.nth(nth)
-            await locator.hover()
-            nth_msg = f", nth={nth}" if nth is not None else ""
-            message = f"Hovered over {element} (role={role}, name={name}{nth_msg})"
-        elif selector:
-            await page.hover(selector)
-            message = f"Hovered over {element} (selector={selector})"
-        else:
-            return {"error": "Must provide either (role + name) or selector"}
+        playwright_locator, desc = _get_locator(page, locator, nth)
+        await playwright_locator.hover()
+        message = f"Hovered over {element} ({desc})"
 
         return await _get_snapshot_result(page, message)
     except Exception as e:
@@ -486,9 +497,7 @@ async def browser_hover(
 async def browser_type(
     element: str,
     text: str,
-    role: Optional[str] = None,
-    name: Optional[str] = None,
-    selector: Optional[str] = None,
+    locator: ElementLocator,
     nth: Optional[int] = None,
     submit: bool = False,
     slowly: bool = False,
@@ -498,9 +507,7 @@ async def browser_type(
     Args:
         element: Human-readable element description
         text: Text to type into the element
-        role: ARIA role of the element (e.g., 'textbox', 'searchbox', 'combobox')
-        name: Accessible name of the element (from snapshot)
-        selector: CSS selector (fallback if role/name not available)
+        locator: Element locator (AriaLabel with role/name or Selector with CSS/XPath selector)
         nth: Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
         submit: Whether to submit (press Enter after)
         slowly: Whether to type one character at a time
@@ -510,39 +517,18 @@ async def browser_type(
         return {"error": "No browser page available"}
 
     try:
-        # Prefer role-based locators
-        if role and name:
-            locator = page.get_by_role(role, name=name)
-            if nth is not None:
-                locator = locator.nth(nth)
-            if slowly:
-                await locator.type(text)
-            else:
-                await locator.fill(text)
+        playwright_locator, desc = _get_locator(page, locator, nth)
 
-            nth_msg = f", nth={nth}" if nth is not None else ""
-            if submit:
-                await locator.press("Enter")
-                message = f"Typed '{text}' into {element} and submitted (role={role}, name={name}{nth_msg})"
-            else:
-                message = (
-                    f"Typed '{text}' into {element} (role={role}, name={name}{nth_msg})"
-                )
-        elif selector:
-            if slowly:
-                await page.type(selector, text)
-            else:
-                await page.fill(selector, text)
-
-            if submit:
-                await page.press(selector, "Enter")
-                message = (
-                    f"Typed '{text}' into {element} and submitted (selector={selector})"
-                )
-            else:
-                message = f"Typed '{text}' into {element} (selector={selector})"
+        if slowly:
+            await playwright_locator.type(text)
         else:
-            return {"error": "Must provide either (role + name) or selector"}
+            await playwright_locator.fill(text)
+
+        if submit:
+            await playwright_locator.press("Enter")
+            message = f"Typed '{text}' into {element} and submitted ({desc})"
+        else:
+            message = f"Typed '{text}' into {element} ({desc})"
 
         return await _get_snapshot_result(page, message)
     except Exception as e:
@@ -568,11 +554,11 @@ async def browser_press_key(key: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-async def browser_fill_form(fields: list[dict[str, str]]) -> dict[str, Any]:
+async def browser_fill_form(fields: list[FormField]) -> dict[str, Any]:
     """Fill multiple form fields
 
     Args:
-        fields: List of fields to fill, each with 'element', 'value', and either ('role' + 'name') or 'selector'
+        fields: List of FormField objects, each with element description, value, locator, and optional nth index
     """
     page = get_current_page()
     if not page:
@@ -582,26 +568,12 @@ async def browser_fill_form(fields: list[dict[str, str]]) -> dict[str, Any]:
     errors = []
 
     for field in fields:
-        role = field.get("role")
-        name = field.get("name")
-        selector = field.get("selector")
-        value = field.get("value")
-        element_desc = field.get("element", name or selector)
-
-        if not value:
-            continue
-
         try:
-            if role and name:
-                await page.get_by_role(role, name=name).fill(value)
-                filled_fields.append(f"{element_desc} (role={role})")
-            elif selector:
-                await page.fill(selector, value)
-                filled_fields.append(f"{element_desc} (selector)")
-            else:
-                errors.append(f"{element_desc}: missing role+name or selector")
+            playwright_locator, desc = _get_locator(page, field.locator, field.nth)
+            await playwright_locator.fill(field.value)
+            filled_fields.append(f"{field.element} ({desc})")
         except Exception as e:
-            errors.append(f"{element_desc}: {str(e)}")
+            errors.append(f"{field.element}: {str(e)}")
 
     message = f"Filled {len(filled_fields)} fields: {', '.join(filled_fields)}"
     if errors:
@@ -614,9 +586,7 @@ async def browser_fill_form(fields: list[dict[str, str]]) -> dict[str, Any]:
 async def browser_select_option(
     element: str,
     values: list[str],
-    role: Optional[str] = None,
-    name: Optional[str] = None,
-    selector: Optional[str] = None,
+    locator: ElementLocator,
     nth: Optional[int] = None,
 ) -> dict[str, Any]:
     """Select an option in a dropdown
@@ -624,9 +594,7 @@ async def browser_select_option(
     Args:
         element: Human-readable element description
         values: Array of values to select
-        role: ARIA role of the element (typically 'combobox' or 'listbox')
-        name: Accessible name of the element (from snapshot)
-        selector: CSS selector (fallback if role/name not available)
+        locator: Element locator (AriaLabel with role/name or Selector with CSS/XPath selector)
         nth: Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
     """
     page = get_current_page()
@@ -634,20 +602,9 @@ async def browser_select_option(
         return {"error": "No browser page available"}
 
     try:
-        if role and name:
-            locator = page.get_by_role(role, name=name)
-            if nth is not None:
-                locator = locator.nth(nth)
-            await locator.select_option(values)
-            nth_msg = f", nth={nth}" if nth is not None else ""
-            message = (
-                f"Selected {values} in {element} (role={role}, name={name}{nth_msg})"
-            )
-        elif selector:
-            await page.select_option(selector, values)
-            message = f"Selected {values} in {element} (selector={selector})"
-        else:
-            return {"error": "Must provide either (role + name) or selector"}
+        playwright_locator, desc = _get_locator(page, locator, nth)
+        await playwright_locator.select_option(values)
+        message = f"Selected {values} in {element} ({desc})"
 
         return await _get_snapshot_result(page, message)
     except Exception as e:
@@ -684,13 +641,9 @@ async def browser_file_upload(paths: Optional[list[str]] = None) -> str:
 async def browser_drag(
     startElement: str,
     endElement: str,
-    startRole: Optional[str] = None,
-    startName: Optional[str] = None,
-    startSelector: Optional[str] = None,
+    startLocator: ElementLocator,
+    endLocator: ElementLocator,
     startNth: Optional[int] = None,
-    endRole: Optional[str] = None,
-    endName: Optional[str] = None,
-    endSelector: Optional[str] = None,
     endNth: Optional[int] = None,
 ) -> dict[str, Any]:
     """Perform drag and drop between two elements
@@ -698,13 +651,9 @@ async def browser_drag(
     Args:
         startElement: Human-readable source element description
         endElement: Human-readable target element description
-        startRole: ARIA role of source element
-        startName: Accessible name of source element
-        startSelector: CSS selector for source (fallback)
+        startLocator: Source element locator (AriaLabel with role/name or Selector with CSS/XPath selector)
+        endLocator: Target element locator (AriaLabel with role/name or Selector with CSS/XPath selector)
         startNth: Zero-based index for source element when multiple match
-        endRole: ARIA role of target element
-        endName: Accessible name of target element
-        endSelector: CSS selector for target (fallback)
         endNth: Zero-based index for target element when multiple match
     """
     page = get_current_page()
@@ -712,39 +661,13 @@ async def browser_drag(
         return {"error": "No browser page available"}
 
     try:
-        # Determine source locator
-        if startRole and startName:
-            source = page.get_by_role(startRole, name=startName)
-            if startNth is not None:
-                source = source.nth(startNth)
-            nth_msg = f", nth={startNth}" if startNth is not None else ""
-            source_desc = (
-                f"{startElement} (role={startRole}, name={startName}{nth_msg})"
-            )
-        elif startSelector:
-            source = page.locator(startSelector)
-            source_desc = f"{startElement} (selector={startSelector})"
-        else:
-            return {
-                "error": "Must provide either (startRole + startName) or startSelector"
-            }
-
-        # Determine target locator
-        if endRole and endName:
-            target = page.get_by_role(endRole, name=endName)
-            if endNth is not None:
-                target = target.nth(endNth)
-            nth_msg = f", nth={endNth}" if endNth is not None else ""
-            target_desc = f"{endElement} (role={endRole}, name={endName}{nth_msg})"
-        elif endSelector:
-            target = page.locator(endSelector)
-            target_desc = f"{endElement} (selector={endSelector})"
-        else:
-            return {"error": "Must provide either (endRole + endName) or endSelector"}
+        source, source_desc = _get_locator(page, startLocator, startNth)
+        target, target_desc = _get_locator(page, endLocator, endNth)
 
         await source.drag_to(target)
         return await _get_snapshot_result(
-            page, f"Dragged from {source_desc} to {target_desc}"
+            page,
+            f"Dragged from {startElement} ({source_desc}) to {endElement} ({target_desc})",
         )
     except Exception as e:
         return {
@@ -754,78 +677,78 @@ async def browser_drag(
         }
 
 
-@mcp.tool()
-async def browser_evaluate(
-    function: str,
-    element: Optional[str] = None,
-    selector: Optional[str] = None,
-) -> str:
-    """Evaluate JavaScript expression on page or element
+# @mcp.tool()
+# async def browser_evaluate(
+#     function: str,
+#     element: Optional[str] = None,
+#     selector: Optional[str] = None,
+# ) -> str:
+#     """Evaluate JavaScript expression on page or element
 
-    Args:
-        function: JavaScript function as string (e.g., "() => document.title")
-        element: Human-readable element description
-        selector: CSS selector for target element (if evaluating on specific element)
-    """
-    page = get_current_page()
-    if not page:
-        return "No browser page available"
+#     Args:
+#         function: JavaScript function as string (e.g., "() => document.title")
+#         element: Human-readable element description
+#         selector: CSS selector for target element (if evaluating on specific element)
+#     """
+#     page = get_current_page()
+#     if not page:
+#         return "No browser page available"
 
-    try:
-        if element and selector:
-            element_handle = await page.query_selector(selector)
-            if element_handle:
-                result = await element_handle.evaluate(function)
-            else:
-                return json.dumps({"error": f"Element not found: {selector}"}, indent=2)
-        else:
-            result = await page.evaluate(function)
+#     try:
+#         if element and selector:
+#             element_handle = await page.query_selector(selector)
+#             if element_handle:
+#                 result = await element_handle.evaluate(function)
+#             else:
+#                 return json.dumps({"error": f"Element not found: {selector}"}, indent=2)
+#         else:
+#             result = await page.evaluate(function)
 
-        return json.dumps(result, indent=2)
-    except Exception as e:
-        return json.dumps({"error": f"Failed to evaluate: {str(e)}"}, indent=2)
+#         return json.dumps(result, indent=2)
+#     except Exception as e:
+#         return json.dumps({"error": f"Failed to evaluate: {str(e)}"}, indent=2)
 
 
-@mcp.tool()
-async def browser_wait_for(
-    time: Optional[float] = None,
-    text: Optional[str] = None,
-    textGone: Optional[str] = None,
-) -> str:
-    """Wait for text to appear/disappear or a specified time to pass
+# @mcp.tool()
+# async def browser_wait_for(
+#     time: Optional[float] = None,
+#     text: Optional[str] = None,
+#     text_gone: Optional[str] = None,
+# ) -> str:
+#     """Wait for text to appear/disappear or a specified time to pass
 
-    Args:
-        time: Time to wait in seconds
-        text: Text to wait for to appear
-        textGone: Text to wait for to disappear
-    """
-    page = get_current_page()
-    if not page:
-        return "No browser page available"
+#     Args:
+#         time: Time to wait in seconds
+#         text: Text to wait for to appear
+#         text_gone: Text to wait for to disappear
+#     """
+#     page = get_current_page()
+#     if not page:
+#         return "No browser page available"
 
-    if time is not None:
-        await page.wait_for_timeout(int(time * 1000))
-        return f"Waited for {time} seconds"
-    elif text:
-        await page.wait_for_selector(f"text={text}")
-        return f"Waited for text '{text}' to appear"
-    elif textGone:
-        await page.wait_for_selector(f"text={textGone}", state="hidden")
-        return f"Waited for text '{textGone}' to disappear"
-    else:
-        return "No wait condition specified"
+#     if time is not None:
+#         await page.wait_for_timeout(int(time * 1000))
+#         return f"Waited for {time} seconds"
+#     elif text:
+#         await page.wait_for_selector(f"text={text}")
+#         return f"Waited for text '{text}' to appear"
+#     elif text_gone:
+#         await page.wait_for_selector(f"text={text_gone}", state="hidden")
+#         return f"Waited for text '{text_gone}' to disappear"
+#     else:
+#         return "No wait condition specified"
 
 
 # Dialog and Monitoring Tools
 
 
 # @mcp.tool()
-# async def browser_handle_dialog(accept: bool, promptText: Optional[str] = None) -> str:
+# async def browser_handle_dialog(accept: bool, prompt_text: Optional[str] = None) -> str:
 #     """Handle a dialog
 
 #     Args:
 #         accept: Whether to accept the dialog
-#         promptText: Text to enter in prompt dialog
+#         prompt_text: Text to enter in prompt dialog
 #     """
 #     page = get_current_page()
 #     if not page:
@@ -834,8 +757,8 @@ async def browser_wait_for(
 #     # Set up dialog handler for the next dialog
 #     async def handle_dialog(dialog):
 #         if accept:
-#             if promptText:
-#                 await dialog.accept(promptText)
+#             if prompt_text:
+#                 await dialog.accept(prompt_text)
 #             else:
 #                 await dialog.accept()
 #         else:
@@ -848,15 +771,15 @@ async def browser_wait_for(
 
 
 # @mcp.tool()
-# async def browser_console_messages(onlyErrors: bool = False) -> str:
+# async def browser_console_messages(only_errors: bool = False) -> str:
 #     """Returns all console messages
 
 #     Args:
-#         onlyErrors: Only return error messages
+#         only_errors: Only return error messages
 #     """
 #     global console_messages
 
-#     if onlyErrors:
+#     if only_errors:
 #         errors = [msg for msg in console_messages if msg["type"] == "error"]
 #         return json.dumps(errors, indent=2)
 
