@@ -51,9 +51,7 @@ def _setup_page_listeners(page: Page) -> None:
     )
 
 
-async def _initialize_browser(
-    headless: bool = True, width: int = 1920, height: int = 1080
-) -> Page:
+async def _initialize_browser(headless: bool = True) -> Page:
     """Initialize browser with consistent settings"""
     global browser, context, pages, current_page_index, playwright_instance, console_messages, network_requests
 
@@ -200,22 +198,17 @@ async def _get_snapshot_result(
 
 
 @mcp.tool()
-async def browser_open(width: int = 1920, height: int = 1080) -> str:
-    """Open a new browser instance
-
-    Args:
-        width: Initial browser width
-        height: Initial browser height
-    """
+async def browser_open() -> str:
+    """Open a new browser instance"""
     global browser, headless
 
     if browser is not None:
         return "Browser is already open. Close it first with browser_close before opening a new one."
 
-    await _initialize_browser(headless=headless, width=width, height=height)
+    await _initialize_browser(headless=headless)
 
     mode = "headless" if headless else "headed"
-    return f"Browser opened in {mode} mode with viewport {width}x{height}"
+    return f"Browser opened in {mode} mode"
 
 
 # Core Navigation Tools
@@ -329,7 +322,7 @@ async def browser_take_screenshot(
     type: str = "png",
     element: Optional[str] = None,
     ref: Optional[str] = None,
-    fullPage: bool = False,
+    full_page: bool = False,
 ) -> Image:
     """Take a screenshot of the current page
 
@@ -337,7 +330,7 @@ async def browser_take_screenshot(
         type: Image format (png or jpeg)
         element: Human-readable element description
         ref: Exact target element reference from the page snapshot
-        fullPage: Take screenshot of full scrollable page
+        full_page: Take screenshot of full scrollable page
     """
     page = get_current_page()
     if not page:
@@ -354,7 +347,7 @@ async def browser_take_screenshot(
             raise ValueError(f"Element not found: {ref}")
     else:
         # Screenshot full page or viewport
-        screenshot_options["full_page"] = fullPage
+        screenshot_options["full_page"] = full_page
         screenshot_bytes = await page.screenshot(**screenshot_options)
 
     return Image(data=screenshot_bytes, format=type)
@@ -363,14 +356,14 @@ async def browser_take_screenshot(
 @mcp.tool()
 async def browser_get_html(
     selector: Optional[str] = None,
-    maxLength: int = 50000,
+    max_length: int = 50000,
     filter_tags: Optional[list[str]] = None,
 ) -> str:
     """Get HTML content for debugging when locators fail
 
     Args:
         selector: CSS selector to get HTML from (defaults to body)
-        maxLength: Maximum characters to return (default 50000)
+        max_length: Maximum characters to return (default 50000)
         filter_tags: List of tag names to remove (e.g., ['script', 'style']). Defaults to ['script']
     """
     page = get_current_page()
@@ -401,10 +394,10 @@ async def browser_get_html(
 
         # Truncate if too long
         original_length = len(html)
-        if len(html) > maxLength:
+        if len(html) > max_length:
             html = (
-                html[:maxLength]
-                + f"\n\n... [truncated {len(html) - maxLength} characters]"
+                html[:max_length]
+                + f"\n\n... [truncated {len(html) - max_length} characters]"
             )
 
         return json.dumps(
@@ -429,7 +422,7 @@ async def browser_click(
     element: str,
     locator: ElementLocator,
     nth: Optional[int] = None,
-    doubleClick: bool = False,
+    double_click: bool = False,
     button: str = "left",
     modifiers: Optional[list[str]] = None,
 ) -> dict[str, Any]:
@@ -439,7 +432,7 @@ async def browser_click(
         element: Human-readable element description
         locator: Element locator (AriaLabel with role/name or Selector with CSS/XPath selector)
         nth: Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
-        doubleClick: Whether to perform a double click
+        double_click: Whether to perform a double click
         button: Button to click (left, right, middle)
         modifiers: Modifier keys to press (Alt, Control, Meta, Shift)
     """
@@ -454,7 +447,7 @@ async def browser_click(
     try:
         playwright_locator, desc = _get_locator(page, locator, nth)
 
-        if doubleClick:
+        if double_click:
             await playwright_locator.dblclick(**click_options)
             message = f"Double-clicked on {element} ({desc})"
         else:
@@ -639,41 +632,41 @@ async def browser_file_upload(paths: Optional[list[str]] = None) -> str:
 
 @mcp.tool()
 async def browser_drag(
-    startElement: str,
-    endElement: str,
-    startLocator: ElementLocator,
-    endLocator: ElementLocator,
-    startNth: Optional[int] = None,
-    endNth: Optional[int] = None,
+    start_element: str,
+    end_element: str,
+    start_locator: ElementLocator,
+    end_locator: ElementLocator,
+    start_nth: Optional[int] = None,
+    end_nth: Optional[int] = None,
 ) -> dict[str, Any]:
     """Perform drag and drop between two elements
 
     Args:
-        startElement: Human-readable source element description
-        endElement: Human-readable target element description
-        startLocator: Source element locator (AriaLabel with role/name or Selector with CSS/XPath selector)
-        endLocator: Target element locator (AriaLabel with role/name or Selector with CSS/XPath selector)
-        startNth: Zero-based index for source element when multiple match
-        endNth: Zero-based index for target element when multiple match
+        start_element: Human-readable source element description
+        end_element: Human-readable target element description
+        start_locator: Source element locator (AriaLabel with role/name or Selector with CSS/XPath selector)
+        end_locator: Target element locator (AriaLabel with role/name or Selector with CSS/XPath selector)
+        start_nth: Zero-based index for source element when multiple match
+        end_nth: Zero-based index for target element when multiple match
     """
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
 
     try:
-        source, source_desc = _get_locator(page, startLocator, startNth)
-        target, target_desc = _get_locator(page, endLocator, endNth)
+        source, source_desc = _get_locator(page, start_locator, start_nth)
+        target, target_desc = _get_locator(page, end_locator, end_nth)
 
         await source.drag_to(target)
         return await _get_snapshot_result(
             page,
-            f"Dragged from {startElement} ({source_desc}) to {endElement} ({target_desc})",
+            f"Dragged from {start_element} ({source_desc}) to {end_element} ({target_desc})",
         )
     except Exception as e:
         return {
             "error": f"Failed to drag: {str(e)}",
-            "startElement": startElement,
-            "endElement": endElement,
+            "start_element": start_element,
+            "end_element": end_element,
         }
 
 

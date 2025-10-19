@@ -71,12 +71,7 @@ def _setup_page_listeners(page: Page, session: BrowserSession) -> None:
     )
 
 
-async def _initialize_browser(
-    session: BrowserSession,
-    headless: bool = True,
-    width: int = 1920,
-    height: int = 1080,
-) -> Page:
+async def _initialize_browser(session: BrowserSession, headless: bool = True) -> Page:
     """Initialize browser with consistent settings for a session"""
 
     session.playwright_instance = await async_playwright().start()
@@ -262,29 +257,22 @@ async def _get_snapshot_result(
 
 
 @mcp.tool()
-async def browser_open(
-    session_id: str = "default",
-    headless: bool = True,
-    width: int = 1920,
-    height: int = 1080,
-) -> str:
+async def browser_open(session_id: str = "default", headless: bool = True) -> str:
     """Open a new browser instance for this session
 
     Args:
         session_id: Unique identifier for this client session
         headless: Whether to run browser in headless mode
-        width: Initial browser width
-        height: Initial browser height
     """
     session = get_session(session_id)
 
     if session.browser is not None:
         return f"Browser is already open for session {session_id}"
 
-    await _initialize_browser(session, headless=headless, width=width, height=height)
+    await _initialize_browser(session, headless=headless)
 
     mode = "headless" if headless else "headed"
-    return f"Browser opened in {mode} mode for session {session_id} with viewport {width}x{height}"
+    return f"Browser opened in {mode} mode for session {session_id}"
 
 
 @mcp.tool()
@@ -413,7 +401,7 @@ async def browser_take_screenshot(
     type: str = "png",
     element: Optional[str] = None,
     ref: Optional[str] = None,
-    fullPage: bool = False,
+    full_page: bool = False,
 ) -> str:
     """Take a screenshot of the current page
 
@@ -422,7 +410,7 @@ async def browser_take_screenshot(
         type: Image format (png or jpeg)
         element: Human-readable element description
         ref: Exact target element reference from the page snapshot
-        fullPage: Take screenshot of full scrollable page
+        full_page: Take screenshot of full scrollable page
     """
     session = get_session(session_id)
     page = get_current_page(session)
@@ -441,7 +429,7 @@ async def browser_take_screenshot(
             raise ValueError(f"Element not found: {ref}")
     else:
         # Screenshot full page or viewport
-        screenshot_options["full_page"] = fullPage
+        screenshot_options["full_page"] = full_page
         screenshot_bytes = await page.screenshot(**screenshot_options)
 
     return Image(data=screenshot_bytes, format=type)
@@ -451,7 +439,7 @@ async def browser_take_screenshot(
 async def browser_get_html(
     session_id: str = "default",
     selector: Optional[str] = None,
-    maxLength: int = 50000,
+    max_length: int = 50000,
     filter_tags: Optional[list[str]] = None,
 ) -> str:
     """Get HTML content for debugging when locators fail
@@ -459,7 +447,7 @@ async def browser_get_html(
     Args:
         session_id: Unique identifier for this client session
         selector: CSS selector to get HTML from (defaults to body)
-        maxLength: Maximum characters to return (default 50000)
+        max_length: Maximum characters to return (default 50000)
         filter_tags: List of tag names to remove (e.g., ['script', 'style']). Defaults to ['script']
     """
     session = get_session(session_id)
@@ -492,10 +480,10 @@ async def browser_get_html(
 
         # Truncate if too long
         original_length = len(html)
-        if len(html) > maxLength:
+        if len(html) > max_length:
             html = (
-                html[:maxLength]
-                + f"\n\n... [truncated {len(html) - maxLength} characters]"
+                html[:max_length]
+                + f"\n\n... [truncated {len(html) - max_length} characters]"
             )
 
         return json.dumps(
@@ -559,7 +547,7 @@ async def browser_click(
     locator: ElementLocator,
     nth: Optional[int] = None,
     session_id: str = "default",
-    doubleClick: bool = False,
+    double_click: bool = False,
     button: str = "left",
     modifiers: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
@@ -570,7 +558,7 @@ async def browser_click(
         locator: Element locator (AriaLabel with role/name or Selector with CSS/XPath selector)
         nth: Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
         session_id: Unique identifier for this client session
-        doubleClick: Whether to perform a double click
+        double_click: Whether to perform a double click
         button: Button to click (left, right, middle)
         modifiers: Modifier keys to press (Alt, Control, Meta, Shift)
     """
@@ -587,7 +575,7 @@ async def browser_click(
     try:
         playwright_locator, desc = _get_locator(page, locator, nth)
 
-        if doubleClick:
+        if double_click:
             await playwright_locator.dblclick(**click_options)
             message = f"Double-clicked on {element} ({desc})"
         else:
@@ -797,23 +785,23 @@ async def browser_file_upload(
 
 @mcp.tool()
 async def browser_drag(
-    startElement: str,
-    endElement: str,
-    startLocator: ElementLocator,
-    endLocator: ElementLocator,
-    startNth: Optional[int] = None,
-    endNth: Optional[int] = None,
+    start_element: str,
+    end_element: str,
+    start_locator: ElementLocator,
+    end_locator: ElementLocator,
+    start_nth: Optional[int] = None,
+    end_nth: Optional[int] = None,
     session_id: str = "default",
 ) -> Dict[str, Any]:
     """Perform drag and drop between two elements
 
     Args:
-        startElement: Human-readable source element description
-        endElement: Human-readable target element description
-        startLocator: Source element locator (AriaLabel with role/name or Selector with CSS/XPath selector)
-        endLocator: Target element locator (AriaLabel with role/name or Selector with CSS/XPath selector)
-        startNth: Zero-based index for source element when multiple match
-        endNth: Zero-based index for target element when multiple match
+        start_element: Human-readable source element description
+        end_element: Human-readable target element description
+        start_locator: Source element locator (AriaLabel with role/name or Selector with CSS/XPath selector)
+        end_locator: Target element locator (AriaLabel with role/name or Selector with CSS/XPath selector)
+        start_nth: Zero-based index for source element when multiple match
+        end_nth: Zero-based index for target element when multiple match
         session_id: Unique identifier for this client session
     """
     session = get_session(session_id)
@@ -823,19 +811,19 @@ async def browser_drag(
         return {"error": "No browser page available"}
 
     try:
-        source, source_desc = _get_locator(page, startLocator, startNth)
-        target, target_desc = _get_locator(page, endLocator, endNth)
+        source, source_desc = _get_locator(page, start_locator, start_nth)
+        target, target_desc = _get_locator(page, end_locator, end_nth)
 
         await source.drag_to(target)
         return await _get_snapshot_result(
             page,
-            f"Dragged from {startElement} ({source_desc}) to {endElement} ({target_desc})",
+            f"Dragged from {start_element} ({source_desc}) to {end_element} ({target_desc})",
         )
     except Exception as e:
         return {
             "error": f"Failed to drag: {str(e)}",
-            "startElement": startElement,
-            "endElement": endElement,
+            "start_element": start_element,
+            "end_element": end_element,
         }
 
 
@@ -877,7 +865,7 @@ async def browser_wait_for(
     session_id: str = "default",
     time: Optional[float] = None,
     text: Optional[str] = None,
-    textGone: Optional[str] = None,
+    text_gone: Optional[str] = None,
 ) -> str:
     """Wait for text to appear/disappear or a specified time to pass
 
@@ -885,7 +873,7 @@ async def browser_wait_for(
         session_id: Unique identifier for this client session
         time: Time to wait in seconds
         text: Text to wait for to appear
-        textGone: Text to wait for to disappear
+        text_gone: Text to wait for to disappear
     """
     session = get_session(session_id)
     page = get_current_page(session)
@@ -899,9 +887,9 @@ async def browser_wait_for(
     elif text:
         await page.wait_for_selector(f"text={text}")
         return f"Waited for text '{text}' to appear"
-    elif textGone:
-        await page.wait_for_selector(f"text={textGone}", state="hidden")
-        return f"Waited for text '{textGone}' to disappear"
+    elif text_gone:
+        await page.wait_for_selector(f"text={text_gone}", state="hidden")
+        return f"Waited for text '{text_gone}' to disappear"
     else:
         return "No wait condition specified"
 
@@ -911,14 +899,14 @@ async def browser_wait_for(
 
 @mcp.tool()
 async def browser_handle_dialog(
-    accept: bool, session_id: str = "default", promptText: Optional[str] = None
+    accept: bool, session_id: str = "default", prompt_text: Optional[str] = None
 ) -> str:
     """Handle a dialog
 
     Args:
         accept: Whether to accept the dialog
         session_id: Unique identifier for this client session
-        promptText: Text to enter in prompt dialog
+        prompt_text: Text to enter in prompt dialog
     """
     session = get_session(session_id)
     page = get_current_page(session)
@@ -929,8 +917,8 @@ async def browser_handle_dialog(
     # Set up dialog handler for the next dialog
     async def handle_dialog(dialog):
         if accept:
-            if promptText:
-                await dialog.accept(promptText)
+            if prompt_text:
+                await dialog.accept(prompt_text)
             else:
                 await dialog.accept()
         else:
@@ -944,17 +932,17 @@ async def browser_handle_dialog(
 
 @mcp.tool()
 async def browser_console_messages(
-    session_id: str = "default", onlyErrors: bool = False
+    session_id: str = "default", only_errors: bool = False
 ) -> str:
     """Returns all console messages
 
     Args:
         session_id: Unique identifier for this client session
-        onlyErrors: Only return error messages
+        only_errors: Only return error messages
     """
     session = get_session(session_id)
 
-    if onlyErrors:
+    if only_errors:
         errors = [msg for msg in session.console_messages if msg["type"] == "error"]
         return json.dumps(errors, indent=2)
 

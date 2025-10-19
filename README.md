@@ -75,7 +75,7 @@ python src/server.py
     - `element` (string): Human-readable element description
     - `locator` (ElementLocator): Element locator - either AriaLabel with `role` and `name` fields, or Selector with `selector` field
     - `nth` (number, optional): Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
-    - `doubleClick` (boolean, optional): Whether to perform a double click instead of a single click
+    - `double_click` (boolean, optional): Whether to perform a double click instead of a single click
     - `button` (string, optional): Button to click (left, right, middle), defaults to left
     - `modifiers` (array, optional): Modifier keys to press (Alt, Control, Meta, Shift)
   - Read-only: **false**
@@ -90,12 +90,12 @@ python src/server.py
   - Title: Drag mouse
   - Description: Perform drag and drop between two elements
   - Parameters:
-    - `startElement` (string): Human-readable source element description
-    - `startLocator` (ElementLocator): Source element locator - either AriaLabel with `role` and `name` fields, or Selector with `selector` field
-    - `startNth` (number, optional): Zero-based index for source element when multiple match
-    - `endElement` (string): Human-readable target element description
-    - `endLocator` (ElementLocator): Target element locator - either AriaLabel with `role` and `name` fields, or Selector with `selector` field
-    - `endNth` (number, optional): Zero-based index for target element when multiple match
+    - `start_element` (string): Human-readable source element description
+    - `start_locator` (ElementLocator): Source element locator - either AriaLabel with `role` and `name` fields, or Selector with `selector` field
+    - `start_nth` (number, optional): Zero-based index for source element when multiple match
+    - `end_element` (string): Human-readable target element description
+    - `end_locator` (ElementLocator): Target element locator - either AriaLabel with `role` and `name` fields, or Selector with `selector` field
+    - `end_nth` (number, optional): Zero-based index for target element when multiple match
   - Read-only: **false**
 
 - **browser_file_upload**
@@ -117,7 +117,7 @@ python src/server.py
   - Description: Get HTML content for debugging when locators fail
   - Parameters:
     - `selector` (string, optional): CSS selector to get HTML from (defaults to body)
-    - `maxLength` (number, optional): Maximum characters to return (default 50000)
+    - `max_length` (number, optional): Maximum characters to return (default 50000)
     - `filter_tags` (array, optional): List of tag names to remove (e.g., ['script', 'style']). Defaults to ['script']
   - Read-only: **true**
 
@@ -146,9 +146,7 @@ python src/server.py
 - **browser_open**
   - Title: Open browser
   - Description: Open a new browser instance
-  - Parameters:
-    - `width` (number, optional): Initial browser width (default 1920)
-    - `height` (number, optional): Initial browser height (default 1080)
+  - Parameters: None
   - Read-only: **false**
 
 - **browser_press_key**
@@ -196,7 +194,7 @@ python src/server.py
     - `type` (string, optional): Image format (png or jpeg). Default is png.
     - `element` (string, optional): Human-readable element description
     - `ref` (string, optional): Exact target element reference (CSS selector) from the page snapshot
-    - `fullPage` (boolean, optional): Take screenshot of full scrollable page
+    - `full_page` (boolean, optional): Take screenshot of full scrollable page
   - Read-only: **true**
 
 - **browser_type**
