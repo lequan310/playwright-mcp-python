@@ -390,7 +390,7 @@ async def browser_take_screenshot(
     element: Annotated[Optional[str], "Human-readable element description"] = None,
     locator: Annotated[
         Optional[ElementLocator],
-        "Element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector)",
+        "Element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector). Leave empty to screenshot full page or viewport",
     ] = None,
     nth: Annotated[
         Optional[int],
