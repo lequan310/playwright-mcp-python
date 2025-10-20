@@ -214,7 +214,7 @@ async def browser_open() -> str:
 # Core Navigation Tools
 
 
-@mcp.tool()
+@mcp.tool(tags={"navigation"})
 async def browser_navigate(
     url: Annotated[str, "The URL to navigate to"],
 ) -> dict[str, Any]:
@@ -225,7 +225,7 @@ async def browser_navigate(
     return await _get_snapshot_result(page, f"Navigated to {url}")
 
 
-@mcp.tool()
+@mcp.tool(tags={"navigation"})
 async def browser_navigate_back() -> dict[str, Any]:
     """Go back to the previous page"""
     page = get_current_page()
@@ -236,7 +236,7 @@ async def browser_navigate_back() -> dict[str, Any]:
     return await _get_snapshot_result(page, "Navigated back")
 
 
-@mcp.tool()
+@mcp.tool(tags={"navigation"})
 async def browser_search(
     query: Annotated[str, "The search query or topic to search for"],
 ) -> dict[str, Any]:
@@ -251,7 +251,7 @@ async def browser_search(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"navigation"})
 async def browser_close() -> str:
     """Close the browser and clean up all resources"""
     global browser, context, pages, playwright_instance, console_messages, network_requests, current_page_index
@@ -274,7 +274,7 @@ async def browser_close() -> str:
     return "Browser was not open"
 
 
-@mcp.tool()
+@mcp.tool(tags={"navigation"})
 async def browser_resize(
     width: Annotated[int, "Width of the browser window"],
     height: Annotated[int, "Height of the browser window"],
@@ -291,7 +291,7 @@ async def browser_resize(
 # Snapshot and Screenshot Tools
 
 
-@mcp.tool()
+@mcp.tool(tags={"screenshot", "snapshot"})
 async def browser_snapshot() -> dict[str, Any]:
     """Capture accessibility snapshot of the current page. Use this tool in case the you think the web did not fully load previously."""
     page = get_current_page()
@@ -311,7 +311,7 @@ async def browser_snapshot() -> dict[str, Any]:
     return result
 
 
-@mcp.tool()
+@mcp.tool(tags={"screenshot", "snapshot"})
 async def browser_take_screenshot(
     type: Annotated[str, "Image format (png or jpeg)"] = "png",
     element: Annotated[Optional[str], "Human-readable element description"] = None,
@@ -344,7 +344,7 @@ async def browser_take_screenshot(
     return Image(data=screenshot_bytes, format=type)
 
 
-@mcp.tool()
+@mcp.tool(tags={"screenshot", "snapshot"})
 async def browser_get_html(
     selector: Annotated[
         Optional[str], "CSS selector to get HTML from (defaults to body)"
@@ -404,10 +404,29 @@ async def browser_get_html(
         return json.dumps({"error": f"Failed to get HTML: {str(e)}"}, indent=2)
 
 
+@mcp.tool(tags={"screenshot", "snapshot"})
+async def browser_get_text_content() -> str:
+    """Get all text content from the current page. Useful for extracting clean article text."""
+    from trafilatura import extract
+
+    page = get_current_page()
+    if not page:
+        return json.dumps({"error": "No browser page available"}, indent=2)
+
+    try:
+        content = await page.content()
+        text = extract(
+            content, output_format="markdown", include_links=True, include_tables=True
+        )
+        return text
+    except Exception as e:
+        return json.dumps({"error": f"Failed to get text content: {str(e)}"}, indent=2)
+
+
 # Interaction Tools
 
 
-@mcp.tool()
+@mcp.tool(tags={"interaction"})
 async def browser_click(
     element: Annotated[str, "Human-readable element description"],
     locator: Annotated[
@@ -448,7 +467,7 @@ async def browser_click(
         return {"error": f"Failed to click: {str(e)}", "element": element}
 
 
-@mcp.tool()
+@mcp.tool(tags={"interaction"})
 async def browser_hover(
     element: Annotated[str, "Human-readable element description"],
     locator: Annotated[
@@ -475,7 +494,7 @@ async def browser_hover(
         return {"error": f"Failed to hover: {str(e)}", "element": element}
 
 
-@mcp.tool()
+@mcp.tool(tags={"interaction"})
 async def browser_type(
     element: Annotated[str, "Human-readable element description"],
     text: Annotated[str, "Text to type into the element"],
@@ -514,7 +533,7 @@ async def browser_type(
         return {"error": f"Failed to type: {str(e)}", "element": element}
 
 
-@mcp.tool()
+@mcp.tool(tags={"interaction"})
 async def browser_press_key(
     key: Annotated[str, "Name of the key to press (e.g., ArrowLeft, a, Enter)"],
 ) -> dict[str, Any]:
@@ -530,7 +549,7 @@ async def browser_press_key(
 # Form and Selection Tools
 
 
-@mcp.tool()
+@mcp.tool(tags={"interaction"})
 async def browser_fill_form(
     fields: Annotated[
         list[FormField],
@@ -560,7 +579,7 @@ async def browser_fill_form(
     return await _get_snapshot_result(page, message)
 
 
-@mcp.tool()
+@mcp.tool(tags={"interaction"})
 async def browser_select_option(
     element: Annotated[str, "Human-readable element description"],
     values: Annotated[list[str], "Array of values to select"],
@@ -588,7 +607,7 @@ async def browser_select_option(
         return {"error": f"Failed to select option: {str(e)}", "element": element}
 
 
-@mcp.tool()
+@mcp.tool(tags={"interaction"})
 async def browser_file_upload(
     paths: Annotated[
         Optional[list[str]],
@@ -615,7 +634,7 @@ async def browser_file_upload(
 # Advanced Interaction Tools
 
 
-@mcp.tool()
+@mcp.tool(tags={"interaction"})
 async def browser_drag(
     start_element: Annotated[str, "Human-readable source element description"],
     end_element: Annotated[str, "Human-readable target element description"],
@@ -775,7 +794,7 @@ async def browser_drag(
 # Tab Management Tools
 
 
-@mcp.tool()
+@mcp.tool(tags={"tabs"})
 async def browser_tabs(
     action: Annotated[
         Literal["list", "create", "close", "select"],

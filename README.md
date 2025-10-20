@@ -121,6 +121,12 @@ python src/server.py
     - `filter_tags` (array, optional): List of tag names to remove (e.g., ['script', 'style']). Defaults to ['script']
   - Read-only: **true**
 
+- **browser_get_text_content**
+  - Title: Get page's text content
+  - Description: Get page's text content in markdown format. Useful when extracting clean article text.
+  - Parameters: None
+  - Read-only: **true**
+
 - **browser_hover**
   - Title: Hover mouse
   - Description: Hover over element on page
