@@ -1,4 +1,6 @@
 import json
+import logging
+import re
 from typing import Annotated, Any, Literal, Optional
 from urllib.parse import quote_plus
 
@@ -13,6 +15,12 @@ from patchright.async_api import (
 )
 
 from schemas.element import AriaNode, ElementLocator, FormField, Selector
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 mcp = FastMCP("Playwright MCP Server")
 
@@ -163,7 +171,7 @@ def _get_locator(page: Page, locator: ElementLocator, nth: Optional[int] = None)
 
 
 async def _get_snapshot_result(
-    page: Optional[Page], action_message: str
+    page: Optional[Page], action_message: str, wait_for_load: bool = True
 ) -> dict[str, Any]:
     """Get browser snapshot with action result message
 
@@ -178,9 +186,12 @@ async def _get_snapshot_result(
         return {"error": "No browser page available", "message": action_message}
 
     try:
-        await page.wait_for_load_state("load")
-        await page.wait_for_timeout(1000)  # Wait a bit for dynamic content
+        if wait_for_load:
+            await page.wait_for_load_state("load")
+            await page.wait_for_timeout(1000)  # Wait a bit for dynamic content
         snapshot = await page.locator("body").aria_snapshot()
+        # Remove all /url: patterns (standalone lines or inline)
+        snapshot = re.sub(r"\n\s*-\s*/url:[^\n]*", "", snapshot)
         page_url = page.url
         page_title = await page.title()
 
@@ -203,6 +214,7 @@ async def _get_snapshot_result(
 @mcp.tool()
 async def browser_open() -> str:
     """Open a new browser instance"""
+    logger.info(f"Tool called: browser_open")
     global browser, headless
 
     if browser is not None:
@@ -222,6 +234,7 @@ async def browser_navigate(
     url: Annotated[str, "The URL to navigate to"],
 ) -> dict[str, Any]:
     """Navigate to a URL"""
+    logger.info(f"Tool called: browser_navigate, args: url={url}")
     global headless
     page = await ensure_browser(headless=headless)
     await page.goto(url, wait_until="load")
@@ -231,12 +244,13 @@ async def browser_navigate(
 @mcp.tool(tags={"navigation"})
 async def browser_navigate_back() -> dict[str, Any]:
     """Go back to the previous page"""
+    logger.info(f"Tool called: browser_navigate_back")
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
 
     await page.go_back()
-    return await _get_snapshot_result(page, "Navigated back")
+    return await _get_snapshot_result(page, "Navigated back", wait_for_load=False)
 
 
 @mcp.tool(tags={"navigation"})
@@ -244,6 +258,7 @@ async def browser_search(
     query: Annotated[str, "The search query or topic to search for"],
 ) -> dict[str, Any]:
     """Search for a topic using Google search"""
+    logger.info(f"Tool called: browser_search, args: query={query}")
     global headless
     page = await ensure_browser(headless=headless)
     encoded_query = quote_plus(query)
@@ -257,6 +272,7 @@ async def browser_search(
 @mcp.tool(tags={"navigation"})
 async def browser_close() -> str:
     """Close the browser and clean up all resources"""
+    logger.info(f"Tool called: browser_close")
     result = await close_browser()
     if result:
         return "Browser closed and all resources cleaned up"
@@ -269,6 +285,7 @@ async def browser_resize(
     height: Annotated[int, "Height of the browser window"],
 ) -> str:
     """Resize the browser window"""
+    logger.info(f"Tool called: browser_resize, args: width={width}, height={height}")
     page = get_current_page()
     if not page:
         return "No browser page available"
@@ -283,6 +300,7 @@ async def browser_resize(
 @mcp.tool(tags={"screenshot", "snapshot"})
 async def browser_snapshot() -> dict[str, Any]:
     """Capture accessibility snapshot of the current page. Use this tool in case the you think the web did not fully load previously."""
+    logger.info(f"Tool called: browser_snapshot")
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
@@ -315,6 +333,9 @@ async def browser_take_screenshot(
     full_page: Annotated[bool, "Take screenshot of full scrollable page"] = False,
 ) -> Image:
     """Take a screenshot of the current page"""
+    logger.info(
+        f"Tool called: browser_take_screenshot, args: type={type}, element={element}, locator={locator}, nth={nth}, full_page={full_page}"
+    )
     page = get_current_page()
     if not page:
         raise ValueError("No browser page available")
@@ -345,6 +366,9 @@ async def browser_get_html(
     ] = None,
 ) -> str:
     """Get HTML content for debugging when locators fail"""
+    logger.info(
+        f"Tool called: browser_get_html, args: selector={selector}, max_length={max_length}, filter_tags={filter_tags}"
+    )
     page = get_current_page()
     if not page:
         return json.dumps({"error": "No browser page available"}, indent=2)
@@ -396,6 +420,7 @@ async def browser_get_html(
 @mcp.tool(tags={"screenshot", "snapshot"})
 async def browser_get_text_content() -> str:
     """Get all text content from the current page. Useful for extracting clean article text."""
+    logger.info(f"Tool called: browser_get_text_content")
     from trafilatura import extract
 
     page = get_current_page()
@@ -433,6 +458,9 @@ async def browser_click(
     ] = None,
 ) -> dict[str, Any]:
     """Perform click on a web page"""
+    logger.info(
+        f"Tool called: browser_click, args: element={element}, locator={locator}, nth={nth}, double_click={double_click}, button={button}, modifiers={modifiers}"
+    )
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
@@ -469,6 +497,9 @@ async def browser_hover(
     ] = None,
 ) -> dict[str, Any]:
     """Hover over element on page"""
+    logger.info(
+        f"Tool called: browser_hover, args: element={element}, locator={locator}, nth={nth}"
+    )
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
@@ -499,6 +530,9 @@ async def browser_type(
     slowly: Annotated[bool, "Whether to type one character at a time"] = False,
 ) -> dict[str, Any]:
     """Type text into editable element"""
+    logger.info(
+        f"Tool called: browser_type, args: element={element}, text={text}, locator={locator}, nth={nth}, submit={submit}, slowly={slowly}"
+    )
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
@@ -527,6 +561,7 @@ async def browser_press_key(
     key: Annotated[str, "Name of the key to press (e.g., ArrowLeft, a, Enter)"],
 ) -> dict[str, Any]:
     """Press a key on the keyboard"""
+    logger.info(f"Tool called: browser_press_key, args: key={key}")
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
@@ -546,6 +581,7 @@ async def browser_fill_form(
     ],
 ) -> dict[str, Any]:
     """Fill multiple form fields"""
+    logger.info(f"Tool called: browser_fill_form, args: fields={fields}")
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
@@ -582,6 +618,9 @@ async def browser_select_option(
     ] = None,
 ) -> dict[str, Any]:
     """Select an option in a dropdown"""
+    logger.info(
+        f"Tool called: browser_select_option, args: element={element}, values={values}, locator={locator}, nth={nth}"
+    )
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
@@ -604,6 +643,7 @@ async def browser_file_upload(
     ] = None,
 ) -> str:
     """Upload one or multiple files"""
+    logger.info(f"Tool called: browser_file_upload, args: paths={paths}")
     page = get_current_page()
     if not page:
         return "No browser page available"
@@ -643,6 +683,9 @@ async def browser_drag(
     ] = None,
 ) -> dict[str, Any]:
     """Perform drag and drop between two elements"""
+    logger.info(
+        f"Tool called: browser_drag, args: start_element={start_element}, end_element={end_element}, start_locator={start_locator}, end_locator={end_locator}, start_nth={start_nth}, end_nth={end_nth}"
+    )
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
@@ -701,6 +744,7 @@ async def browser_wait_for(
     time: Annotated[int, "Time to wait in seconds"] = 5,
 ) -> dict[str, Any]:
     """Wait for a specified time to pass. Useful for waiting on animations or dynamic content."""
+    logger.info(f"Tool called: browser_wait_for, args: time={time}")
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
@@ -775,6 +819,7 @@ async def browser_tabs(
     index: Annotated[Optional[int], "Tab index for close/select operations"] = None,
 ) -> str:
     """List, create, close, or select a browser tab"""
+    logger.info(f"Tool called: browser_tabs, args: action={action}, index={index}")
     global pages, current_page_index, context, headless
 
     if action == "list":
