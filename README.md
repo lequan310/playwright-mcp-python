@@ -6,7 +6,6 @@ A Model Context Protocol (MCP) server that provides browser automation capabilit
 
 - 🎯 **Role-Based Locators**: Use semantic roles and names from accessibility tree instead of brittle CSS selectors
 - 📸 **Automatic Snapshots**: Every action returns the updated page state automatically
-- 🔒 **Session Management**: Supports multiple concurrent clients with isolated browser sessions
 - ♿ **Accessibility-First**: Interacts with pages the same way screen readers do
 - 🚀 **Playwright-Powered**: Leverages Playwright's robust browser automation
 
@@ -46,21 +45,11 @@ fastmcp dev src/server.py
 
 This launches an interactive inspector where you can test tools and see real-time browser interactions.
 
-### Production Mode
-
-For production deployment with session management:
-
-```bash
-python src/session_server.py
-```
-
-Or for single-client mode:
+For single-client mode:
 
 ```bash
 python src/server.py
 ```
-
-**Note**: `session_server.py` supports multiple concurrent clients with isolated browser sessions, while `server.py` is designed for single-client usage.
 
 ## Tools
 
@@ -215,6 +204,14 @@ python src/server.py
     - `submit` (boolean, optional): Whether to submit (press Enter after)
     - `slowly` (boolean, optional): Whether to type one character at a time
   - Read-only: **false**
+
+- **browser_wait_for**
+  - Title: Wait for browser
+  - Description: Wait for a specified time in seconds.
+  - Parameters:
+    - `time` (int): Time to wait in second
+  - Read-only: **true**
+
 
 </details>
 

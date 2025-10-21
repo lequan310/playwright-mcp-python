@@ -50,6 +50,45 @@ def _setup_page_listeners(page: Page) -> None:
         ),
     )
 
+    # Set up page close listener
+    page.on("close", _on_page_close)
+
+
+async def _on_page_close(page: Page) -> None:
+    """Handle page close event to update global state"""
+    global pages, current_page_index
+
+    if page in pages:
+        index = pages.index(page)
+        pages.pop(index)
+
+        if current_page_index >= len(pages):
+            current_page_index = max(0, len(pages) - 1)
+
+    if len(pages) == 0:
+        await close_browser()
+
+
+async def close_browser() -> bool:
+    global browser, context, pages, playwright_instance, console_messages, network_requests, current_page_index
+
+    if browser and browser.is_connected():
+        await context.close()
+        await browser.close()
+        if playwright_instance:
+            await playwright_instance.stop()
+
+        browser = None
+        context = None
+        pages = []
+        playwright_instance = None
+        console_messages = []
+        network_requests = []
+        current_page_index = 0
+
+        return True
+    return False
+
 
 async def _initialize_browser(headless: bool = True) -> Page:
     """Initialize browser with consistent settings"""
@@ -66,50 +105,13 @@ async def _initialize_browser(headless: bool = True) -> Page:
         channel="chrome",
     )
 
-    # Handle browser close event
-    def handle_browser_close():
-        global browser, context, pages, playwright_instance, console_messages, network_requests, current_page_index
-        browser = None
-        context = None
-        pages = []
-        playwright_instance = None
-        console_messages = []
-        network_requests = []
-        current_page_index = 0
-
-    browser.on("disconnected", handle_browser_close)
-
-    context = await browser.new_context(
-        no_viewport=True,
-        # viewport={"width": width, "height": height},
-        # user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.7339.16 Chromium/140.0.7339.16 Safari/537.36",
-        # locale="en-US",
-        # timezone_id="America/New_York",
-        # extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
-    )
+    context = await browser.new_context(no_viewport=True)
+    context.on("page", lambda page: _setup_page_listeners(page))
+    context.on("page", lambda page: pages.append(page))
     page = await context.new_page()
-    pages = [page]
     current_page_index = 0
     console_messages = []
     network_requests = []
-
-    # Set up listeners
-    _setup_page_listeners(page)
-
-    # # Hide webdriver flag
-    # await page.add_init_script(
-    #     """
-    #     Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-    # """
-    # )
-
-    # # Spoof plugins & languages
-    # await page.add_init_script(
-    #     """
-    #     Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3]});
-    #     Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
-    # """
-    # )
 
     return page
 
@@ -254,22 +256,8 @@ async def browser_search(
 @mcp.tool(tags={"navigation"})
 async def browser_close() -> str:
     """Close the browser and clean up all resources"""
-    global browser, context, pages, playwright_instance, console_messages, network_requests, current_page_index
-
-    if browser:
-        await context.close()
-        await browser.close()
-        if playwright_instance:
-            await playwright_instance.stop()
-
-        browser = None
-        context = None
-        pages = []
-        playwright_instance = None
-        console_messages = []
-        network_requests = []
-        current_page_index = 0
-
+    result = await close_browser()
+    if result:
         return "Browser closed and all resources cleaned up"
     return "Browser was not open"
 
@@ -707,34 +695,17 @@ async def browser_drag(
 #         return json.dumps({"error": f"Failed to evaluate: {str(e)}"}, indent=2)
 
 
-# @mcp.tool()
-# async def browser_wait_for(
-#     time: Optional[float] = None,
-#     text: Optional[str] = None,
-#     text_gone: Optional[str] = None,
-# ) -> str:
-#     """Wait for text to appear/disappear or a specified time to pass
+@mcp.tool()
+async def browser_wait_for(
+    time: Annotated[int, "Time to wait in seconds"] = 5,
+) -> dict[str, Any]:
+    """Wait for a specified time to pass. Useful for waiting on animations or dynamic content."""
+    page = get_current_page()
+    if not page:
+        return {"error": "No browser page available"}
 
-#     Args:
-#         time: Time to wait in seconds
-#         text: Text to wait for to appear
-#         text_gone: Text to wait for to disappear
-#     """
-#     page = get_current_page()
-#     if not page:
-#         return "No browser page available"
-
-#     if time is not None:
-#         await page.wait_for_timeout(int(time * 1000))
-#         return f"Waited for {time} seconds"
-#     elif text:
-#         await page.wait_for_selector(f"text={text}")
-#         return f"Waited for text '{text}' to appear"
-#     elif text_gone:
-#         await page.wait_for_selector(f"text={text_gone}", state="hidden")
-#         return f"Waited for text '{text_gone}' to disappear"
-#     else:
-#         return "No wait condition specified"
+    await page.wait_for_timeout(time * 1000)
+    return await _get_snapshot_result(page, f"Waited for {time} seconds")
 
 
 # Dialog and Monitoring Tools
@@ -854,3 +825,7 @@ async def browser_tabs(
 
     else:
         return f"Unknown action: {action}"
+
+
+if __name__ == "__main__":
+    mcp.run(transport="streamable-http")
