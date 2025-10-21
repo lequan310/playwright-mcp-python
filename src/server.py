@@ -179,6 +179,7 @@ async def _get_snapshot_result(
 
     try:
         await page.wait_for_load_state("load")
+        await page.wait_for_timeout(1000)  # Wait a bit for dynamic content
         snapshot = await page.locator("body").aria_snapshot()
         page_url = page.url
         page_title = await page.title()
@@ -223,7 +224,7 @@ async def browser_navigate(
     """Navigate to a URL"""
     global headless
     page = await ensure_browser(headless=headless)
-    await page.goto(url)
+    await page.goto(url, wait_until="load")
     return await _get_snapshot_result(page, f"Navigated to {url}")
 
 
@@ -247,7 +248,7 @@ async def browser_search(
     page = await ensure_browser(headless=headless)
     encoded_query = quote_plus(query)
     search_url = f"https://www.google.com/search?q={encoded_query}"
-    await page.goto(search_url)
+    await page.goto(search_url, wait_until="load")
     return await _get_snapshot_result(
         page, f"Searched for '{query}' on Google: {search_url}"
     )
