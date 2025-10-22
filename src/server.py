@@ -214,7 +214,7 @@ async def _get_snapshot_result(
 @mcp.tool()
 async def browser_open() -> str:
     """Open a new browser instance"""
-    logger.info(f"Tool called: browser_open")
+    logger.info("Tool called: browser_open")
     global browser, headless
 
     if browser is not None:
@@ -244,7 +244,7 @@ async def browser_navigate(
 @mcp.tool(tags={"navigation"})
 async def browser_navigate_back() -> dict[str, Any]:
     """Go back to the previous page"""
-    logger.info(f"Tool called: browser_navigate_back")
+    logger.info("Tool called: browser_navigate_back")
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
@@ -272,7 +272,7 @@ async def browser_search(
 @mcp.tool(tags={"navigation"})
 async def browser_close() -> str:
     """Close the browser and clean up all resources"""
-    logger.info(f"Tool called: browser_close")
+    logger.info("Tool called: browser_close")
     result = await close_browser()
     if result:
         return "Browser closed and all resources cleaned up"
@@ -309,7 +309,7 @@ async def browser_snapshot(
     ] = None,
 ) -> dict[str, Any]:
     """Capture accessibility snapshot of the current page. Use this tool in case the you think the web did not fully load previously."""
-    logger.info(f"Tool called: browser_snapshot")
+    logger.info("Tool called: browser_snapshot")
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
@@ -436,7 +436,7 @@ async def browser_get_html(
 @mcp.tool(tags={"screenshot", "snapshot"})
 async def browser_get_text_content() -> str:
     """Get all text content from the current page. Useful for extracting clean article text."""
-    logger.info(f"Tool called: browser_get_text_content")
+    logger.info("Tool called: browser_get_text_content")
     from trafilatura import extract
 
     page = get_current_page()
