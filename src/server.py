@@ -298,15 +298,31 @@ async def browser_resize(
 
 
 @mcp.tool(tags={"screenshot", "snapshot"})
-async def browser_snapshot() -> dict[str, Any]:
+async def browser_snapshot(
+    locator: Annotated[
+        Optional[ElementLocator],
+        "Element locator (AriaNode with ARIA role/name or Selector with CSS/XPath selector). Leave empty to get full page snapshot",
+    ] = None,
+    nth: Annotated[
+        Optional[int],
+        "Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)",
+    ] = None,
+) -> dict[str, Any]:
     """Capture accessibility snapshot of the current page. Use this tool in case the you think the web did not fully load previously."""
     logger.info(f"Tool called: browser_snapshot")
     page = get_current_page()
     if not page:
         return {"error": "No browser page available"}
 
-    # Get accessibility tree snapshot
-    snapshot = await page.locator("body").aria_snapshot()
+    if locator:
+        # Get snapshot for specific element
+        playwright_locator, desc = _get_locator(page, locator, nth)
+        snapshot = await playwright_locator.aria_snapshot()
+    else:
+        # Get full page snapshot
+        snapshot = await page.locator("body").aria_snapshot()
+    # Remove all /url: patterns (standalone lines or inline)
+    snapshot = re.sub(r"\n\s*-\s*/url:[^\n]*", "", snapshot)
 
     # Get page metadata
     page_url = page.url

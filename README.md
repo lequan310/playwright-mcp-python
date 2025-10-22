@@ -179,7 +179,9 @@ python src/server.py
 - **browser_snapshot**
   - Title: Page snapshot
   - Description: Capture accessibility snapshot of the current page
-  - Parameters: None
+  - Parameters:
+    - `locator` (ElementLocator, optional): Element locator - either AriaNode with ARIA `role` and `name` fields, or Selector with `selector` field
+    - `nth` (number, optional): Zero-based index when multiple elements match (e.g., nth=0 for first, nth=1 for second)
   - Read-only: **true**
 
 - **browser_take_screenshot**
